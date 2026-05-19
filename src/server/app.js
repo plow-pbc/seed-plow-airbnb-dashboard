@@ -54,11 +54,11 @@ export function createApp({ fetchUpstream, fetchMessage, ttlMs = 60_000, now = D
 
 function registerCachedRoute(
   app,
-  { path, fetcher, contentType, onMissAndError, ttlMs, now, cacheKey = (url) => url.search },
+  { path, fetcher, contentType, onMissAndError, ttlMs, now, cacheKey = () => '' },
 ) {
-  // One cache slot per cacheKey(url) — for /api/message this normalizes to
-  // ?type=<value> only; for /api/ical it falls back to url.search which is
-  // always '' since the route takes no params.
+  // One cache slot per cacheKey(url). Default is single-slot; routes that
+  // need to shard upstream by query (like /api/message's ?type=) pass their
+  // own cacheKey.
   const cacheByQs = new Map();
   app.get(path, async (c) => {
     const url = new URL(c.req.url);
