@@ -91,6 +91,13 @@ describe('createMessageHandler — GET', () => {
     expect(await res.json()).toEqual({ message: affirmation });
   });
 
+  it('treats ?type= (empty value) the same as no filter', async () => {
+    const alert = msg({ type: 'alert', text: 'a' });
+    const affirmation = msg({ type: 'affirmation', text: 'b' });
+    const res = await get(fakeStore([alert, affirmation]), '?type=');
+    expect(await res.json()).toEqual({ message: alert });
+  });
+
   it('returns null when ?type= matches nothing', async () => {
     const alert = msg({ type: 'alert' });
     const res = await get(fakeStore([alert]), '?type=affirmation');

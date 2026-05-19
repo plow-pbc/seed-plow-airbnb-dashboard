@@ -1,5 +1,4 @@
-import type { Message } from '../src/message';
-import { pickLatest } from '../src/message';
+import { pickLatest, type Message } from '../src/message';
 import { appendMessage, getRecentMessages, type StorageEnv } from './_storage';
 
 export type MessageStore = {
@@ -22,7 +21,8 @@ export function createMessageHandler({
     }
 
     if (req.method === 'GET') {
-      const type = new URL(req.url).searchParams.get('type') ?? undefined;
+      const typeParam = new URL(req.url).searchParams.get('type');
+      const type = typeParam ? typeParam : undefined;
       const messages = await store.list();
       const message = pickLatest(messages, { type }, now());
       return Response.json({ message });
