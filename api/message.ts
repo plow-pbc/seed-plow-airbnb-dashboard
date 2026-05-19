@@ -20,8 +20,14 @@ export function createMessageHandler({ kv, token }: { kv: Kv; token: string }) {
       if (!text) return new Response('text required', { status: 400 });
       const rawExpiresAt = body?.expires_at;
       if (rawExpiresAt != null) {
-        if (typeof rawExpiresAt !== 'string' || Number.isNaN(Date.parse(rawExpiresAt))) {
-          return new Response('expires_at must be an ISO string or null', { status: 400 });
+        if (
+          typeof rawExpiresAt !== 'string' ||
+          Number.isNaN(Date.parse(rawExpiresAt)) ||
+          !/(?:Z|[+-]\d{2}:?\d{2})$/.test(rawExpiresAt)
+        ) {
+          return new Response('expires_at must include a timezone offset (Z or ±HH:MM)', {
+            status: 400,
+          });
         }
       }
       const message: Message = {

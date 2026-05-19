@@ -122,6 +122,41 @@ describe('createMessageHandler', () => {
     expect(res.status).toBe(400);
   });
 
+  it('POST rejects expires_at without a timezone offset', async () => {
+    const res = await handler(fakeKv())(
+      new Request('https://x/api/message', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret', 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'ok', expires_at: '2026-05-18T23:59:59' }),
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('POST accepts expires_at with explicit Z offset', async () => {
+    const kv = fakeKv();
+    const res = await handler(kv)(
+      new Request('https://x/api/message', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret', 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'ok', expires_at: '2026-05-18T23:59:59Z' }),
+      }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('POST accepts expires_at with explicit ±HH:MM offset', async () => {
+    const kv = fakeKv();
+    const res = await handler(kv)(
+      new Request('https://x/api/message', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer secret', 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'ok', expires_at: '2026-05-18T23:59:59-07:00' }),
+      }),
+    );
+    expect(res.status).toBe(200);
+  });
+
   it('rejects an unsupported method with 405', async () => {
     const res = await handler(fakeKv())(
       new Request('https://x/api/message', {
