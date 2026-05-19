@@ -126,3 +126,21 @@ body {
 .error-state {
   color: #b00020;
 }
+
+.message-card {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem 1.5rem;
+  background: #fff7e0;
+  border: 1px solid #f0d97a;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
+}
+
+.message-text {
+  margin: 0;
+  font-size: 1.05em;
+  line-height: 1.4;
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

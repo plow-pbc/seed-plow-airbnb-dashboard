@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { parseICS } from './ical';
 import type { Event } from './types';
 import { EventRow } from './components/EventRow';
+import { Message } from './components/Message';
+import { isFresh, type Message as MessageType } from './message';
 
 const NEXT_N = Number(__NEXT_N__);
 const REFRESH_MS = Number(__REFRESH_MS__);
@@ -18,6 +20,7 @@ type State =
 
 export function App() {
   const [state, setState] = useState<State>({ kind: 'loading' });
+  const [message, setMessage] = useState<MessageType | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,6 +37,17 @@ export function App() {
       }
     })();
 
+    (async () => {
+      try {
+        const res = await fetch('/api/message');
+        if (!res.ok) return;
+        const body = (await res.json()) as { message: MessageType | null };
+        if (!cancelled) setMessage(body.message);
+      } catch {
+        // Non-critical: leave message null on failure.
+      }
+    })();
+
     const reloadTimer = setTimeout(() => location.reload(), REFRESH_MS);
     return () => {
       cancelled = true;
@@ -42,9 +56,11 @@ export function App() {
   }, []);
 
   const fetchedAt = state.kind === 'ready' ? state.fetchedAt : null;
+  const showMessage = isFresh(message, new Date());
 
   return (
     <main className="app">
+      {showMessage && message && <Message message={message} />}
       <header className="header">
         <h1>Family Calendar</h1>
         {fetchedAt && <span className="as-of">as of {timeFmt.format(fetchedAt)}</span>}
