@@ -18,5 +18,5 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "api"]
 }

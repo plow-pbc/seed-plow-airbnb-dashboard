@@ -8,6 +8,13 @@ if (!ICAL_URL) {
   process.exit(1);
 }
 
+const MESSAGE_API_URL = process.env.MESSAGE_API_URL;
+const DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN;
+const messagesEnabled = Boolean(MESSAGE_API_URL && DASHBOARD_TOKEN);
+if (!messagesEnabled) {
+  console.warn('Messages disabled (set MESSAGE_API_URL + DASHBOARD_TOKEN to enable).');
+}
+
 const PORT = Number(process.env.PORT) || 5174;
 
 const app = createApp({
@@ -16,6 +23,16 @@ const app = createApp({
     if (!res.ok) throw new Error(`Upstream returned HTTP ${res.status}`);
     return await res.text();
   },
+  fetchMessage: messagesEnabled
+    ? async () => {
+        const res = await fetch(MESSAGE_API_URL, {
+          headers: { Authorization: `Bearer ${DASHBOARD_TOKEN}` },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!res.ok) throw new Error(`Message API returned HTTP ${res.status}`);
+        return await res.text();
+      }
+    : undefined,
 });
 
 // SPA static + fallback. Order matters: API routes registered first inside createApp.
