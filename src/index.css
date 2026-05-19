@@ -23,11 +23,11 @@ html {
  * Portrait kiosk rotation. The signal is landscape (e.g. 1920×1080) but the
  * monitor is mounted in portrait, so we rotate the body to compensate. The
  * body lays out in portrait dimensions (width: 100vh, height: 100vw) and
- * then rotates 90° CW around its top-left, translating right so it lands
+ * then rotates 90° CCW around its top-left, translating down so it lands
  * inside the landscape viewport.
  *
- * If the monitor is rotated the other way (90° CCW physically), flip to
- * `rotate(-90deg)` and `translate(0, 100vh)`.
+ * If the monitor is rotated the other way (90° CW physically), flip to
+ * `rotate(90deg)` and `translate(100vw, 0)`.
  */
 body {
   margin: 0;
@@ -38,7 +38,7 @@ body {
   width: 100vh;
   height: 100vw;
   transform-origin: top left;
-  transform: translate(100vw, 0) rotate(90deg);
+  transform: translate(0, 100vh) rotate(-90deg);
   overflow: hidden;
   background: var(--bg);
   color: var(--fg);
