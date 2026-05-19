@@ -55,6 +55,16 @@ export function App() {
     };
   }, []);
 
+  // Hide the message the moment expires_at passes so we don't show stale text
+  // until the next REFRESH_MS reload. No-op when expires_at is null.
+  useEffect(() => {
+    if (!message?.expires_at) return;
+    const delay = new Date(message.expires_at).getTime() - Date.now();
+    if (delay <= 0) return;
+    const timer = setTimeout(() => setMessage(null), delay);
+    return () => clearTimeout(timer);
+  }, [message]);
+
   const fetchedAt = state.kind === 'ready' ? state.fetchedAt : null;
   const showMessage = isFresh(message, new Date());
 
