@@ -86,4 +86,79 @@ describe('createApp', () => {
     expect(res.status).toBe(403);
     expect(fetchUpstream).not.toHaveBeenCalled();
   });
+
+  it('/api/message is not registered when fetchMessage is omitted', async () => {
+    const app = makeApp({ fetchUpstream: vi.fn() });
+    const res = await app.fetch(new Request('http://localhost/api/message'));
+    expect(res.status).toBe(404);
+  });
+
+  it('/api/message fetches upstream on first call and returns application/json', async () => {
+    const fetchMessage = vi.fn().mockResolvedValue('{"message":{"text":"hi"}}');
+    const app = createApp({ fetchUpstream: vi.fn(), fetchMessage });
+
+    const res = await app.fetch(new Request('http://localhost/api/message'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    expect(await res.text()).toBe('{"message":{"text":"hi"}}');
+    expect(fetchMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('/api/message returns cached body within ttl', async () => {
+    const fetchMessage = vi.fn().mockResolvedValue('CACHED');
+    let t = 1_000_000;
+    const app = createApp({
+      fetchUpstream: vi.fn(),
+      fetchMessage,
+      ttlMs: 60_000,
+      now: () => t,
+    });
+
+    await app.fetch(new Request('http://localhost/api/message'));
+    t += 30_000;
+    const res = await app.fetch(new Request('http://localhost/api/message'));
+
+    expect(await res.text()).toBe('CACHED');
+    expect(fetchMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('/api/message serves stale cache when upstream fails after ttl', async () => {
+    const fetchMessage = vi
+      .fn()
+      .mockResolvedValueOnce('{"message":{"text":"first"}}')
+      .mockRejectedValueOnce(new Error('network down'));
+    let t = 1_000_000;
+    const app = createApp({
+      fetchUpstream: vi.fn(),
+      fetchMessage,
+      ttlMs: 60_000,
+      now: () => t,
+    });
+
+    await app.fetch(new Request('http://localhost/api/message'));
+    t += 90_000;
+    const res = await app.fetch(new Request('http://localhost/api/message'));
+
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('{"message":{"text":"first"}}');
+    expect(fetchMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('/api/message returns {message:null} envelope when upstream fails with no cache', async () => {
+    const fetchMessage = vi.fn().mockRejectedValue(new Error('network down'));
+    const app = createApp({ fetchUpstream: vi.fn(), fetchMessage });
+
+    const res = await app.fetch(new Request('http://localhost/api/message'));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ message: null });
+  });
+
+  it('/api/message rejects requests with a non-loopback Host header', async () => {
+    const fetchMessage = vi.fn();
+    const app = createApp({ fetchUpstream: vi.fn(), fetchMessage });
+
+    const res = await app.fetch(new Request('http://evil.example/api/message'));
+    expect(res.status).toBe(403);
+    expect(fetchMessage).not.toHaveBeenCalled();
+  });
 });
