@@ -24,8 +24,8 @@ const app = createApp({
     return await res.text();
   },
   fetchMessage: messagesEnabled
-    ? async () => {
-        const res = await fetch(MESSAGE_API_URL, {
+    ? async (qs = '') => {
+        const res = await fetch(`${MESSAGE_API_URL}${qs}`, {
           headers: { Authorization: `Bearer ${DASHBOARD_TOKEN}` },
           signal: AbortSignal.timeout(10_000),
         });

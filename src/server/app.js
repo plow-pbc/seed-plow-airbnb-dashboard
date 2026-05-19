@@ -37,6 +37,13 @@ export function createApp({ fetchUpstream, fetchMessage, ttlMs = 60_000, now = D
       // Fail open: when the message API is unreachable and we have no cache,
       // return an empty envelope so the dashboard keeps rendering the calendar.
       onMissAndError: (c) => c.json({ message: null }),
+      // Normalize: only `?type=<value>` matters upstream. Drop any other params
+      // so unknown/hostile query strings collapse to the no-filter slot instead
+      // of spawning their own cache entry and bearer-authenticated upstream call.
+      cacheKey: (url) => {
+        const type = url.searchParams.get('type');
+        return type ? `?type=${encodeURIComponent(type)}` : '';
+      },
       ttlMs,
       now,
     });
@@ -45,19 +52,28 @@ export function createApp({ fetchUpstream, fetchMessage, ttlMs = 60_000, now = D
   return app;
 }
 
-function registerCachedRoute(app, { path, fetcher, contentType, onMissAndError, ttlMs, now }) {
-  let cache = null;
+function registerCachedRoute(
+  app,
+  { path, fetcher, contentType, onMissAndError, ttlMs, now, cacheKey = () => '' },
+) {
+  // One cache slot per cacheKey(url). Default is single-slot; routes that
+  // need to shard upstream by query (like /api/message's ?type=) pass their
+  // own cacheKey.
+  const cacheByQs = new Map();
   app.get(path, async (c) => {
+    const url = new URL(c.req.url);
+    const qs = cacheKey(url);
     const t = now();
-    if (cache && t - cache.fetchedAt < ttlMs) {
-      return c.body(cache.body, 200, { 'content-type': contentType });
+    const cached = cacheByQs.get(qs);
+    if (cached && t - cached.fetchedAt < ttlMs) {
+      return c.body(cached.body, 200, { 'content-type': contentType });
     }
     try {
-      const body = await fetcher();
-      cache = { body, fetchedAt: t };
+      const body = await fetcher(qs);
+      cacheByQs.set(qs, { body, fetchedAt: t });
       return c.body(body, 200, { 'content-type': contentType });
     } catch {
-      if (cache) return c.body(cache.body, 200, { 'content-type': contentType });
+      if (cached) return c.body(cached.body, 200, { 'content-type': contentType });
       return onMissAndError(c);
     }
   });

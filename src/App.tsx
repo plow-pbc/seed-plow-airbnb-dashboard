@@ -39,7 +39,7 @@ export function App() {
 
     (async () => {
       try {
-        const res = await fetch('/api/message');
+        const res = await fetch('/api/message?type=affirmation');
         if (!res.ok) return;
         const body = (await res.json()) as { message: MessageType | null };
         if (!cancelled) setMessage(body.message);

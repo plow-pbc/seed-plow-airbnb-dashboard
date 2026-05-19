@@ -77,7 +77,7 @@ One Node process serves the Vite-built React SPA AND proxies the secret ICS URL 
 
 ## Messages (optional)
 
-Plow posts short messages (morning affirmations etc.) to a tiny Vercel function under `api/` backed by Vercel KV. The Pi polls that function through its existing proxy pattern, so the bearer token never reaches the browser. Messages render above the calendar; `expires_at` is respected client-side and hides stale messages without a write.
+Plow posts typed messages (`affirmation`, `alert`, `reminder`, ...) to a tiny Vercel function under `api/` backed by Vercel KV. Storage is a Redis list — each POST `LPUSH`es a record and `LTRIM`s to the most recent 50. The Pi polls the function through its existing proxy pattern (so the bearer token never reaches the browser) and requests `?type=affirmation` for the top slot, which renders the latest unexpired affirmation above the calendar. `expires_at` is respected client-side and hides stale messages without a write.
 
 To enable:
 

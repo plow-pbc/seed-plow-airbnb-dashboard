@@ -1,58 +1,77 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getCurrentMessage, setCurrentMessage } from './_storage';
+import { appendMessage, getRecentMessages, MAX_MESSAGES } from './_storage';
+import { msg } from '../test/fixtures';
 
-describe('storage', () => {
-  it('getCurrentMessage parses the Upstash envelope and hits current_message with bearer auth', async () => {
+const ENV = { url: 'https://kv', token: 't' };
+
+describe('appendMessage', () => {
+  it('LPUSHes the JSON-stringified message and trims to MAX_MESSAGES', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ result: 1 })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ result: 'OK' })));
+
+    const m = msg({ text: 'hello' });
+    await appendMessage({ ...ENV, fetchFn }, m);
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+
+    const [lpushUrl, lpushInit] = fetchFn.mock.calls[0];
+    expect(lpushUrl).toBe('https://kv/lpush/messages');
+    expect(lpushInit.method).toBe('POST');
+    expect((lpushInit.headers as Record<string, string>).Authorization).toBe('Bearer t');
+    expect(lpushInit.body).toBe(JSON.stringify(m));
+
+    const [ltrimUrl, ltrimInit] = fetchFn.mock.calls[1];
+    expect(ltrimUrl).toBe(`https://kv/ltrim/messages/0/${MAX_MESSAGES - 1}`);
+    expect(ltrimInit.method).toBe('POST');
+    expect((ltrimInit.headers as Record<string, string>).Authorization).toBe('Bearer t');
+  });
+
+  it('throws on non-2xx from LPUSH', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('boom', { status: 502 }));
+    await expect(appendMessage({ ...ENV, fetchFn }, msg())).rejects.toThrow(/502/);
+  });
+
+  it('throws on non-2xx from LTRIM', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ result: 1 })))
+      .mockResolvedValueOnce(new Response('boom', { status: 502 }));
+    await expect(appendMessage({ ...ENV, fetchFn }, msg())).rejects.toThrow(/502/);
+  });
+});
+
+describe('getRecentMessages', () => {
+  it('LRANGEs and parses each entry, newest first', async () => {
+    const a = msg({ text: 'newest' });
+    const b = msg({ text: 'older' });
     const fetchFn = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ result: JSON.stringify({ text: 'hi', expires_at: null }) })),
+      new Response(JSON.stringify({ result: [JSON.stringify(a), JSON.stringify(b)] })),
     );
-    expect(await getCurrentMessage({ url: 'https://kv', token: 't', fetchFn })).toEqual({
-      text: 'hi',
-      expires_at: null,
-    });
+
+    const out = await getRecentMessages({ ...ENV, fetchFn });
+
+    expect(out).toEqual([a, b]);
     const [url, init] = fetchFn.mock.calls[0];
-    expect(url).toBe('https://kv/get/current_message');
+    expect(url).toBe(`https://kv/lrange/messages/0/${MAX_MESSAGES - 1}`);
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer t');
   });
 
-  it('getCurrentMessage returns null when the key is missing', async () => {
-    const fetchFn = vi
-      .fn()
-      .mockResolvedValue(new Response(JSON.stringify({ result: null })));
-    expect(await getCurrentMessage({ url: 'https://kv', token: 't', fetchFn })).toBeNull();
+  it('returns an empty array when the list is empty / key missing', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(new Response(JSON.stringify({ result: [] })));
+    expect(await getRecentMessages({ ...ENV, fetchFn })).toEqual([]);
   });
 
-  it('getCurrentMessage throws on non-2xx', async () => {
-    const fetchFn = vi
-      .fn()
-      .mockResolvedValue(new Response('upstream gone', { status: 502 }));
-    await expect(
-      getCurrentMessage({ url: 'https://kv', token: 't', fetchFn }),
-    ).rejects.toThrow(/502/);
+  it('returns an empty array when Upstash returns result: null (key never existed)', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(new Response(JSON.stringify({ result: null })));
+    expect(await getRecentMessages({ ...ENV, fetchFn })).toEqual([]);
   });
 
-  it('setCurrentMessage throws on non-2xx', async () => {
-    const fetchFn = vi
-      .fn()
-      .mockResolvedValue(new Response('upstream gone', { status: 502 }));
-    await expect(
-      setCurrentMessage(
-        { url: 'https://kv', token: 't', fetchFn },
-        { text: 'hi', expires_at: null },
-      ),
-    ).rejects.toThrow(/502/);
-  });
-
-  it('setCurrentMessage posts JSON-stringified message to the current_message key', async () => {
-    const fetchFn = vi.fn().mockResolvedValue(new Response(JSON.stringify({ result: 'OK' })));
-    await setCurrentMessage(
-      { url: 'https://kv', token: 't', fetchFn },
-      { text: 'hi', expires_at: null },
-    );
-    const [url, init] = fetchFn.mock.calls[0];
-    expect(url).toBe('https://kv/set/current_message');
-    expect(init.method).toBe('POST');
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer t');
-    expect(init.body).toBe(JSON.stringify({ text: 'hi', expires_at: null }));
+  it('throws on non-2xx', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(new Response('boom', { status: 502 }));
+    await expect(getRecentMessages({ ...ENV, fetchFn })).rejects.toThrow(/502/);
   });
 });

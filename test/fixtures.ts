@@ -1,3 +1,14 @@
+import type { Message } from '../src/message';
+
+export function msg(overrides: Partial<Message> = {}): Message {
+  return {
+    type: 'affirmation',
+    text: 'hi',
+    expires_at: null,
+    ...overrides,
+  };
+}
+
 /** Wraps VEVENT blocks in a minimal VCALENDAR envelope. */
 export function calendar(vevents: string): string {
   return [

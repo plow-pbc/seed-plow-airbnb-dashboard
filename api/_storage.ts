@@ -1,6 +1,7 @@
 import type { Message } from '../src/message';
 
-const KEY = 'current_message';
+const KEY = 'messages';
+export const MAX_MESSAGES = 50;
 
 type FetchFn = typeof fetch;
 
@@ -10,27 +11,37 @@ export type StorageEnv = {
   fetchFn?: FetchFn;
 };
 
-export async function getCurrentMessage({
-  url,
-  token,
-  fetchFn = fetch,
-}: StorageEnv): Promise<Message | null> {
-  const res = await fetchFn(`${url}/get/${KEY}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`KV GET failed: ${res.status}`);
-  const body = (await res.json()) as { result: string | null };
-  return body.result === null ? null : (JSON.parse(body.result) as Message);
+function authHeaders(token: string) {
+  return { Authorization: `Bearer ${token}` };
 }
 
-export async function setCurrentMessage(
+export async function appendMessage(
   { url, token, fetchFn = fetch }: StorageEnv,
   message: Message,
 ): Promise<void> {
-  const res = await fetchFn(`${url}/set/${KEY}`, {
+  const push = await fetchFn(`${url}/lpush/${KEY}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    headers: { ...authHeaders(token), 'content-type': 'application/json' },
     body: JSON.stringify(message),
   });
-  if (!res.ok) throw new Error(`KV SET failed: ${res.status}`);
+  if (!push.ok) throw new Error(`KV LPUSH failed: ${push.status}`);
+
+  const trim = await fetchFn(`${url}/ltrim/${KEY}/0/${MAX_MESSAGES - 1}`, {
+    method: 'POST',
+    headers: authHeaders(token),
+  });
+  if (!trim.ok) throw new Error(`KV LTRIM failed: ${trim.status}`);
+}
+
+export async function getRecentMessages({
+  url,
+  token,
+  fetchFn = fetch,
+}: StorageEnv): Promise<Message[]> {
+  const res = await fetchFn(`${url}/lrange/${KEY}/0/${MAX_MESSAGES - 1}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(`KV LRANGE failed: ${res.status}`);
+  const body = (await res.json()) as { result: string[] | null };
+  return (body.result ?? []).map((s) => JSON.parse(s) as Message);
 }
