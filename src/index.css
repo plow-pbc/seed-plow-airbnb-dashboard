@@ -129,9 +129,6 @@ body {
 
 .message-card {
   margin-bottom: 1.5rem;
-}
-
-.message-card--affirmation {
   padding: 1.25rem 1.5rem;
   background: #fff7e0;
   border: 1px solid #f0d97a;
