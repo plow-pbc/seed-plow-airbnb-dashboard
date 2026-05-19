@@ -6,3 +6,4 @@ dist/
 docs/plans/
 *.log
 *.tsbuildinfo
+.vercel
