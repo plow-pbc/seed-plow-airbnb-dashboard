@@ -1,11 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import { createMessageHandler } from './message';
 
+// Key-strict fake: the handler is expected to use 'current_message' for both
+// GET and SET. Mismatches throw so a KEY rename can't silently pass.
+const EXPECTED_KEY = 'current_message';
+
 function fakeKv(initial: unknown = null) {
   let value: unknown = initial;
+  const requireKey = (key: string) => {
+    if (key !== EXPECTED_KEY) {
+      throw new Error(`fakeKv called with key=${key}, expected ${EXPECTED_KEY}`);
+    }
+  };
   return {
-    get: async <T>() => value as T | null,
-    set: async <T>(_key: string, v: T) => {
+    get: async <T>(key: string) => {
+      requireKey(key);
+      return value as T | null;
+    },
+    set: async <T>(key: string, v: T) => {
+      requireKey(key);
       value = v;
     },
     _peek: () => value,
