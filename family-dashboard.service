@@ -1,0 +1,15 @@
+[Unit]
+Description=Family Dashboard (calendar kiosk app + ICS proxy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=odio
+WorkingDirectory=/home/odio/family-dashboard
+ExecStart=/usr/bin/node --env-file=/home/odio/family-dashboard/.env /home/odio/family-dashboard/server.js
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

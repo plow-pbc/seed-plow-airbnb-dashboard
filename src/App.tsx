@@ -1,0 +1,67 @@
+import { useEffect, useState } from 'react';
+import { parseICS } from './ical';
+import type { Event } from './types';
+import { EventRow } from './components/EventRow';
+
+const NEXT_N = Number(__NEXT_N__);
+const REFRESH_MS = Number(__REFRESH_MS__);
+
+const timeFmt = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+type State =
+  | { kind: 'loading' }
+  | { kind: 'ready'; events: Event[]; fetchedAt: Date }
+  | { kind: 'error' };
+
+export function App() {
+  const [state, setState] = useState<State>({ kind: 'loading' });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch('/api/ical');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        const events = parseICS(text, new Date(), NEXT_N);
+        if (!cancelled) setState({ kind: 'ready', events, fetchedAt: new Date() });
+      } catch {
+        if (!cancelled) setState({ kind: 'error' });
+      }
+    })();
+
+    const reloadTimer = setTimeout(() => location.reload(), REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(reloadTimer);
+    };
+  }, []);
+
+  const fetchedAt = state.kind === 'ready' ? state.fetchedAt : null;
+
+  return (
+    <main className="app">
+      <header className="header">
+        <h1>Family Calendar</h1>
+        {fetchedAt && <span className="as-of">as of {timeFmt.format(fetchedAt)}</span>}
+      </header>
+      {state.kind === 'error' && (
+        <p className="error-state">Can't reach calendar — retrying soon.</p>
+      )}
+      {state.kind === 'ready' &&
+        (state.events.length === 0 ? (
+          <p className="empty-state">No upcoming events.</p>
+        ) : (
+          <ul className="event-list">
+            {state.events.map((event) => (
+              <EventRow key={event.uid} event={event} />
+            ))}
+          </ul>
+        ))}
+    </main>
+  );
+}
