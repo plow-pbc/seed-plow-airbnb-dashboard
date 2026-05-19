@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { appendMessage, getRecentMessages, MAX_MESSAGES } from './_storage';
-import { msg } from '../src/message.fixtures';
+import { msg } from '../test/fixtures';
 
 const ENV = { url: 'https://kv', token: 't' };
 

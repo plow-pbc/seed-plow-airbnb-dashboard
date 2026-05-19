@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Message } from '../src/message';
-import { msg } from '../src/message.fixtures';
+import { msg } from '../test/fixtures';
 import { createMessageHandler, type MessageStore } from './message';
 
 const TOKEN = 'secret';

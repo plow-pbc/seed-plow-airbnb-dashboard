@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { isFresh, pickLatest } from './message';
-import { msg } from './message.fixtures';
+import { msg } from '../test/fixtures';
 
 const NOW = new Date('2026-05-18T08:00:00Z');
 
