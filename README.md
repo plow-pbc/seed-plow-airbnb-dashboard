@@ -43,14 +43,22 @@ curl -s http://localhost:5174/healthz            # should print "ok"
 
 ### Pointing the kiosk at the dashboard
 
-Once the service is running, edit `yodeck-kiosk.service` (or whatever Chromium-launching unit you have) to point at `http://localhost:5174` instead of its current URL, then reload:
+The repo ships two Chromium-launcher units: `yodeck-kiosk.service` (points at Yodeck) and `family-kiosk.service` (points at `http://localhost:5174`). Only one runs at a time — both want the display. Install both and swap between them as needed:
 
 ```sh
+sudo cp yodeck-kiosk.service family-kiosk.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl restart yodeck-kiosk.service
+
+# Activate the family dashboard (and disable Yodeck):
+sudo systemctl disable --now yodeck-kiosk.service
+sudo systemctl enable --now family-kiosk.service
+
+# Or flip back to Yodeck:
+sudo systemctl disable --now family-kiosk.service
+sudo systemctl enable --now yodeck-kiosk.service
 ```
 
-This swap is intentionally a manual step — flip when you're ready.
+`family-kiosk.service` orders itself `After=family-dashboard.service` so the proxy is up by the time Chromium opens the URL.
 
 ## Configuration
 
