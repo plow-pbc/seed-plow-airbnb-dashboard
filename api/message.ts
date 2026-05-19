@@ -1,12 +1,7 @@
+import type { Message } from '../src/message';
 import { makeKv, type Kv } from './_kv';
 
 const KEY = 'current_message';
-
-type Message = {
-  text: string;
-  posted_at: string;
-  expires_at: string | null;
-};
 
 export function createMessageHandler({ kv, token }: { kv: Kv; token: string }) {
   return async (req: Request): Promise<Response> => {
