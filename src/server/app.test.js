@@ -118,6 +118,24 @@ describe('createApp', () => {
       expect(fetcher).toHaveBeenCalledTimes(1);
     });
 
+    it('ignores unknown query params — junk after ?type= shares the typed slot', async () => {
+      const fetcher = vi.fn().mockResolvedValue('SAME');
+      const app = appWith('fetchMessage', fetcher);
+      await app.fetch(new Request('http://localhost/api/message?type=affirmation&x=junk'));
+      await app.fetch(new Request('http://localhost/api/message?type=affirmation&y=other'));
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(fetcher).toHaveBeenNthCalledWith(1, '?type=affirmation');
+    });
+
+    it('ignores unknown query params — ?x=junk collapses to the no-filter slot', async () => {
+      const fetcher = vi.fn().mockResolvedValue('SAME');
+      const app = appWith('fetchMessage', fetcher);
+      await app.fetch(new Request('http://localhost/api/message'));
+      await app.fetch(new Request('http://localhost/api/message?x=anything'));
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(fetcher).toHaveBeenNthCalledWith(1, '');
+    });
+
     it('serves the matching stale body on error — does not bleed across query strings', async () => {
       const fetcher = vi
         .fn()

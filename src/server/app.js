@@ -37,6 +37,13 @@ export function createApp({ fetchUpstream, fetchMessage, ttlMs = 60_000, now = D
       // Fail open: when the message API is unreachable and we have no cache,
       // return an empty envelope so the dashboard keeps rendering the calendar.
       onMissAndError: (c) => c.json({ message: null }),
+      // Normalize: only `?type=<value>` matters upstream. Drop any other params
+      // so unknown/hostile query strings collapse to the no-filter slot instead
+      // of spawning their own cache entry and bearer-authenticated upstream call.
+      cacheKey: (url) => {
+        const type = url.searchParams.get('type');
+        return type ? `?type=${encodeURIComponent(type)}` : '';
+      },
       ttlMs,
       now,
     });
@@ -45,13 +52,17 @@ export function createApp({ fetchUpstream, fetchMessage, ttlMs = 60_000, now = D
   return app;
 }
 
-function registerCachedRoute(app, { path, fetcher, contentType, onMissAndError, ttlMs, now }) {
-  // One cache slot per query string — `?type=affirmation` and `?type=alert`
-  // are different upstream requests and must not share a body.
+function registerCachedRoute(
+  app,
+  { path, fetcher, contentType, onMissAndError, ttlMs, now, cacheKey = (url) => url.search },
+) {
+  // One cache slot per cacheKey(url) — for /api/message this normalizes to
+  // ?type=<value> only; for /api/ical it falls back to url.search which is
+  // always '' since the route takes no params.
   const cacheByQs = new Map();
   app.get(path, async (c) => {
     const url = new URL(c.req.url);
-    const qs = url.search; // includes leading '?' or '' when empty
+    const qs = cacheKey(url);
     const t = now();
     const cached = cacheByQs.get(qs);
     if (cached && t - cached.fetchedAt < ttlMs) {
