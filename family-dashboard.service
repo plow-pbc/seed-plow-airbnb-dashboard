@@ -6,8 +6,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=odio
-WorkingDirectory=/home/odio/family-dashboard
-ExecStart=/usr/bin/node --env-file=/home/odio/family-dashboard/.env /home/odio/family-dashboard/server.js
+WorkingDirectory=/home/odio/services/family-dashboard
+ExecStart=/usr/bin/node --env-file=/home/odio/services/family-dashboard/.env /home/odio/services/family-dashboard/server.js
 Restart=on-failure
 RestartSec=10
 
