@@ -32,7 +32,6 @@ export function createMessageHandler({ kv, token }: { kv: Kv; token: string }) {
       }
       const message: Message = {
         text,
-        posted_at: new Date().toISOString(),
         expires_at: typeof rawExpiresAt === 'string' ? rawExpiresAt : null,
       };
       await kv.set(KEY, message);

@@ -9,47 +9,26 @@ describe('isFresh', () => {
   });
 
   it('returns true when expires_at is null (no expiry)', () => {
-    expect(
-      isFresh({ text: 'hi', posted_at: '2026-05-18T07:00:00Z', expires_at: null }, now),
-    ).toBe(true);
+    expect(isFresh({ text: 'hi', expires_at: null }, now)).toBe(true);
   });
 
   it('returns true when expires_at is in the future', () => {
-    expect(
-      isFresh(
-        { text: 'hi', posted_at: '2026-05-18T07:00:00Z', expires_at: '2026-05-18T12:00:00Z' },
-        now,
-      ),
-    ).toBe(true);
+    expect(isFresh({ text: 'hi', expires_at: '2026-05-18T12:00:00Z' }, now)).toBe(true);
   });
 
   it('returns false when expires_at is in the past', () => {
-    expect(
-      isFresh(
-        { text: 'hi', posted_at: '2026-05-18T07:00:00Z', expires_at: '2026-05-18T07:30:00Z' },
-        now,
-      ),
-    ).toBe(false);
+    expect(isFresh({ text: 'hi', expires_at: '2026-05-18T07:30:00Z' }, now)).toBe(false);
   });
 
   it('returns false when expires_at equals now (boundary)', () => {
-    expect(
-      isFresh(
-        { text: 'hi', posted_at: '2026-05-18T07:00:00Z', expires_at: '2026-05-18T08:00:00Z' },
-        now,
-      ),
-    ).toBe(false);
+    expect(isFresh({ text: 'hi', expires_at: '2026-05-18T08:00:00Z' }, now)).toBe(false);
   });
 
   it('returns false when text is empty', () => {
-    expect(isFresh({ text: '', posted_at: '2026-05-18T07:00:00Z', expires_at: null }, now)).toBe(
-      false,
-    );
+    expect(isFresh({ text: '', expires_at: null }, now)).toBe(false);
   });
 
   it('returns false when text is whitespace only', () => {
-    expect(
-      isFresh({ text: '   ', posted_at: '2026-05-18T07:00:00Z', expires_at: null }, now),
-    ).toBe(false);
+    expect(isFresh({ text: '   ', expires_at: null }, now)).toBe(false);
   });
 });

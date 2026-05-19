@@ -38,7 +38,7 @@ describe('createMessageHandler', () => {
   });
 
   it('GET returns the stored message', async () => {
-    const msg = { text: 'hi', posted_at: '2026-05-18T07:00:00Z', expires_at: null };
+    const msg = { text: 'hi', expires_at: null };
     const res = await handler(fakeKv(msg))(
       new Request('https://x/api/message', { headers: { Authorization: 'Bearer secret' } }),
     );
@@ -68,11 +68,9 @@ describe('createMessageHandler', () => {
       }),
     );
     expect(res.status).toBe(200);
-    const stored = kv._peek() as { text: string; posted_at: string; expires_at: string };
+    const stored = kv._peek() as { text: string; expires_at: string };
     expect(stored.text).toBe('You are loved.');
     expect(stored.expires_at).toBe('2026-05-18T23:59:59Z');
-    expect(typeof stored.posted_at).toBe('string');
-    expect(Number.isNaN(Date.parse(stored.posted_at))).toBe(false);
   });
 
   it('POST trims text', async () => {

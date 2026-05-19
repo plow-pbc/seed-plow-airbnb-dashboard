@@ -1,6 +1,5 @@
 export type Message = {
   text: string;
-  posted_at: string;
   expires_at: string | null;
 };
 
