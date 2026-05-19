@@ -22,10 +22,10 @@ just test
 
 ## Kiosk deploy (Raspberry Pi)
 
-Assumes Node ≥ 20.6 installed at `/usr/bin/node` and the repo cloned to `/home/odio/family-dashboard`.
+Assumes Node ≥ 20.6 installed at `/usr/bin/node` and the repo cloned to `/home/odio/services/family-dashboard`.
 
 ```sh
-cd /home/odio/family-dashboard
+cd /home/odio/services/family-dashboard
 git pull
 npm ci
 npm run build
