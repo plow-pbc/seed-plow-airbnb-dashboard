@@ -46,18 +46,23 @@ export function createApp({ fetchUpstream, fetchMessage, ttlMs = 60_000, now = D
 }
 
 function registerCachedRoute(app, { path, fetcher, contentType, onMissAndError, ttlMs, now }) {
-  let cache = null;
+  // One cache slot per query string — `?type=affirmation` and `?type=alert`
+  // are different upstream requests and must not share a body.
+  const cacheByQs = new Map();
   app.get(path, async (c) => {
+    const url = new URL(c.req.url);
+    const qs = url.search; // includes leading '?' or '' when empty
     const t = now();
-    if (cache && t - cache.fetchedAt < ttlMs) {
-      return c.body(cache.body, 200, { 'content-type': contentType });
+    const cached = cacheByQs.get(qs);
+    if (cached && t - cached.fetchedAt < ttlMs) {
+      return c.body(cached.body, 200, { 'content-type': contentType });
     }
     try {
-      const body = await fetcher();
-      cache = { body, fetchedAt: t };
+      const body = await fetcher(qs);
+      cacheByQs.set(qs, { body, fetchedAt: t });
       return c.body(body, 200, { 'content-type': contentType });
     } catch {
-      if (cache) return c.body(cache.body, 200, { 'content-type': contentType });
+      if (cached) return c.body(cached.body, 200, { 'content-type': contentType });
       return onMissAndError(c);
     }
   });

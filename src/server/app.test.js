@@ -91,6 +91,34 @@ describe('createApp', () => {
     });
   });
 
+  describe('/api/message query-string cache keying', () => {
+    it('caches per query string — different ?type= values do not share a slot', async () => {
+      const fetcher = vi
+        .fn()
+        .mockImplementation(async (qs) => `body-for-${qs}`);
+      const app = appWith('fetchMessage', fetcher);
+
+      const a = await app.fetch(new Request('http://localhost/api/message?type=affirmation'));
+      const b = await app.fetch(new Request('http://localhost/api/message?type=alert'));
+      const aAgain = await app.fetch(new Request('http://localhost/api/message?type=affirmation'));
+
+      expect(await a.text()).toBe('body-for-?type=affirmation');
+      expect(await b.text()).toBe('body-for-?type=alert');
+      expect(await aAgain.text()).toBe('body-for-?type=affirmation');
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher).toHaveBeenNthCalledWith(1, '?type=affirmation');
+      expect(fetcher).toHaveBeenNthCalledWith(2, '?type=alert');
+    });
+
+    it('treats empty query string the same as no query string', async () => {
+      const fetcher = vi.fn().mockResolvedValue('SAME');
+      const app = appWith('fetchMessage', fetcher);
+      await app.fetch(new Request('http://localhost/api/message'));
+      await app.fetch(new Request('http://localhost/api/message?'));
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // Route-specific miss-behavior (the two routes diverge on what to do when
   // upstream fails AND the cache is empty).
   it('/api/ical returns 502 when upstream fails with no cache', async () => {
