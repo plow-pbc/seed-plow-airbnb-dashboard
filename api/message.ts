@@ -1,32 +1,44 @@
 import type { Message } from '../src/message';
-import { getCurrentMessage, setCurrentMessage, type StorageEnv } from './_storage';
+import { pickLatest } from '../src/message';
+import { appendMessage, getRecentMessages, type StorageEnv } from './_storage';
 
 export type MessageStore = {
-  get: () => Promise<Message | null>;
-  set: (message: Message) => Promise<void>;
+  list: () => Promise<Message[]>;
+  append: (message: Message) => Promise<void>;
 };
 
 export function createMessageHandler({
   store,
   token,
+  now = () => new Date(),
 }: {
   store: MessageStore;
   token: string;
+  now?: () => Date;
 }) {
   return async (req: Request): Promise<Response> => {
     if (req.headers.get('authorization') !== `Bearer ${token}`) {
       return new Response('unauthorized', { status: 401 });
     }
+
     if (req.method === 'GET') {
-      const message = await store.get();
+      const type = new URL(req.url).searchParams.get('type') ?? undefined;
+      const messages = await store.list();
+      const message = pickLatest(messages, { type }, now());
       return Response.json({ message });
     }
+
     if (req.method === 'POST') {
       const body = (await req.json().catch(() => null)) as
-        | { text?: unknown; expires_at?: unknown }
+        | { type?: unknown; text?: unknown; expires_at?: unknown }
         | null;
+
+      const type = typeof body?.type === 'string' ? body.type.trim() : '';
+      if (!type) return new Response('type required', { status: 400 });
+
       const text = typeof body?.text === 'string' ? body.text.trim() : '';
       if (!text) return new Response('text required', { status: 400 });
+
       const rawExpiresAt = body?.expires_at;
       if (rawExpiresAt != null) {
         if (
@@ -39,13 +51,17 @@ export function createMessageHandler({
           });
         }
       }
+
       const message: Message = {
+        type,
         text,
+        created_at: now().toISOString(),
         expires_at: typeof rawExpiresAt === 'string' ? rawExpiresAt : null,
       };
-      await store.set(message);
+      await store.append(message);
       return Response.json({ message });
     }
+
     return new Response('method not allowed', { status: 405 });
   };
 }
@@ -59,8 +75,8 @@ export default async function handler(req: Request): Promise<Response> {
   }
   const env: StorageEnv = { url: kvUrl, token: kvToken };
   const store: MessageStore = {
-    get: () => getCurrentMessage(env),
-    set: (message) => setCurrentMessage(env, message),
+    list: () => getRecentMessages(env),
+    append: (message) => appendMessage(env, message),
   };
   return createMessageHandler({ store, token })(req);
 }
