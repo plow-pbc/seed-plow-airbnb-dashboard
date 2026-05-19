@@ -1,7 +1,6 @@
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createApp } from './src/server/app.js';
-import { makeMessageFetcher } from './src/server/message.js';
 
 const ICAL_URL = process.env.ICAL_URL;
 if (!ICAL_URL) {
@@ -25,7 +24,14 @@ const app = createApp({
     return await res.text();
   },
   fetchMessage: messagesEnabled
-    ? makeMessageFetcher({ apiUrl: MESSAGE_API_URL, token: DASHBOARD_TOKEN })
+    ? async () => {
+        const res = await fetch(MESSAGE_API_URL, {
+          headers: { Authorization: `Bearer ${DASHBOARD_TOKEN}` },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!res.ok) throw new Error(`Message API returned HTTP ${res.status}`);
+        return await res.text();
+      }
     : undefined,
 });
 
