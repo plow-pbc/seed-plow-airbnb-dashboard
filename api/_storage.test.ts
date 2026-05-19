@@ -1,17 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { appendMessage, getRecentMessages, MAX_MESSAGES } from './_storage';
-import type { Message } from '../src/message';
+import { msg } from '../src/message.fixtures';
 
 const ENV = { url: 'https://kv', token: 't' };
-
-function msg(overrides: Partial<Message> = {}): Message {
-  return {
-    type: 'affirmation',
-    text: 'hi',
-    expires_at: null,
-    ...overrides,
-  };
-}
 
 describe('appendMessage', () => {
   it('LPUSHes the JSON-stringified message and trims to MAX_MESSAGES', async () => {

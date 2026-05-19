@@ -1,16 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { isFresh, pickLatest, type Message } from './message';
+import { isFresh, pickLatest } from './message';
+import { msg } from './message.fixtures';
 
 const NOW = new Date('2026-05-18T08:00:00Z');
-
-function msg(overrides: Partial<Message> = {}): Message {
-  return {
-    type: 'affirmation',
-    text: 'hi',
-    expires_at: null,
-    ...overrides,
-  };
-}
 
 describe('isFresh', () => {
   it('returns false for null', () => {

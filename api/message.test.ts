@@ -1,19 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type { Message } from '../src/message';
+import { msg } from '../src/message.fixtures';
 import { createMessageHandler, type MessageStore } from './message';
 
 const TOKEN = 'secret';
 const URL_BASE = 'https://x/api/message';
 const NOW = new Date('2026-05-19T12:00:00Z');
-
-function msg(overrides: Partial<Message> = {}): Message {
-  return {
-    type: 'affirmation',
-    text: 'hi',
-    expires_at: null,
-    ...overrides,
-  };
-}
 
 function fakeStore(initial: Message[] = []) {
   const list: Message[] = [...initial];
