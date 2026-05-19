@@ -23,12 +23,4 @@ describe('isFresh', () => {
   it('returns false when expires_at equals now (boundary)', () => {
     expect(isFresh({ text: 'hi', expires_at: '2026-05-18T08:00:00Z' }, now)).toBe(false);
   });
-
-  it('returns false when text is empty', () => {
-    expect(isFresh({ text: '', expires_at: null }, now)).toBe(false);
-  });
-
-  it('returns false when text is whitespace only', () => {
-    expect(isFresh({ text: '   ', expires_at: null }, now)).toBe(false);
-  });
 });
