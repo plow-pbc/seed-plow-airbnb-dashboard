@@ -1,7 +1,6 @@
 export type Message = {
   type: string;
   text: string;
-  created_at: string;
   expires_at: string | null;
 };
 

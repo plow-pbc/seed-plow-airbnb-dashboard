@@ -55,7 +55,6 @@ export function createMessageHandler({
       const message: Message = {
         type,
         text,
-        created_at: now().toISOString(),
         expires_at: typeof rawExpiresAt === 'string' ? rawExpiresAt : null,
       };
       await store.append(message);

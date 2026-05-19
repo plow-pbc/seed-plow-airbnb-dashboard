@@ -7,7 +7,6 @@ function msg(overrides: Partial<Message> = {}): Message {
   return {
     type: 'affirmation',
     text: 'hi',
-    created_at: '2026-05-18T07:00:00Z',
     expires_at: null,
     ...overrides,
   };
@@ -73,13 +72,11 @@ describe('pickLatest', () => {
     const newerExpired = msg({
       type: 'affirmation',
       text: 'newer-gone',
-      created_at: '2026-05-18T07:50:00Z',
       expires_at: '2026-05-18T07:55:00Z',
     });
     const olderFresh = msg({
       type: 'affirmation',
       text: 'older-still',
-      created_at: '2026-05-18T06:00:00Z',
       expires_at: null,
     });
     expect(pickLatest([newerExpired, olderFresh], { type: 'affirmation' }, NOW)).toBe(olderFresh);

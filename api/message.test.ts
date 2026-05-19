@@ -10,7 +10,6 @@ function msg(overrides: Partial<Message> = {}): Message {
   return {
     type: 'affirmation',
     text: 'hi',
-    created_at: '2026-05-19T11:00:00Z',
     expires_at: null,
     ...overrides,
   };
@@ -113,7 +112,7 @@ describe('createMessageHandler — GET', () => {
 });
 
 describe('createMessageHandler — POST', () => {
-  it('appends a message, server-stamps created_at, echoes the stored record', async () => {
+  it('appends a message and echoes the stored record', async () => {
     const store = fakeStore();
     const res = await post(store, {
       type: 'affirmation',
@@ -125,21 +124,9 @@ describe('createMessageHandler — POST', () => {
     expect(body.message).toEqual({
       type: 'affirmation',
       text: 'You are loved.',
-      created_at: NOW.toISOString(),
       expires_at: '2026-05-19T23:59:59Z',
     });
     expect(store._peek()).toEqual([body.message]);
-  });
-
-  it('ignores any client-supplied created_at and stamps server time', async () => {
-    const store = fakeStore();
-    const res = await post(store, {
-      type: 'affirmation',
-      text: 'hi',
-      created_at: '1999-01-01T00:00:00Z',
-    });
-    const body = (await res.json()) as { message: Message };
-    expect(body.message.created_at).toBe(NOW.toISOString());
   });
 
   it('accepts null expires_at (no expiry)', async () => {

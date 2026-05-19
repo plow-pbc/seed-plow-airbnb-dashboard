@@ -8,7 +8,6 @@ function msg(overrides: Partial<Message> = {}): Message {
   return {
     type: 'affirmation',
     text: 'hi',
-    created_at: '2026-05-18T07:00:00Z',
     expires_at: null,
     ...overrides,
   };
