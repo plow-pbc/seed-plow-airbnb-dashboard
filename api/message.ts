@@ -1,15 +1,24 @@
 import type { Message } from '../src/message';
-import { makeKv, type Kv } from './_kv';
+import { getCurrentMessage, setCurrentMessage, type StorageEnv } from './_storage';
 
-const KEY = 'current_message';
+export type MessageStore = {
+  get: () => Promise<Message | null>;
+  set: (message: Message) => Promise<void>;
+};
 
-export function createMessageHandler({ kv, token }: { kv: Kv; token: string }) {
+export function createMessageHandler({
+  store,
+  token,
+}: {
+  store: MessageStore;
+  token: string;
+}) {
   return async (req: Request): Promise<Response> => {
     if (req.headers.get('authorization') !== `Bearer ${token}`) {
       return new Response('unauthorized', { status: 401 });
     }
     if (req.method === 'GET') {
-      const message = await kv.get<Message>(KEY);
+      const message = await store.get();
       return Response.json({ message });
     }
     if (req.method === 'POST') {
@@ -34,7 +43,7 @@ export function createMessageHandler({ kv, token }: { kv: Kv; token: string }) {
         text,
         expires_at: typeof rawExpiresAt === 'string' ? rawExpiresAt : null,
       };
-      await kv.set(KEY, message);
+      await store.set(message);
       return Response.json({ message });
     }
     return new Response('method not allowed', { status: 405 });
@@ -48,8 +57,12 @@ export default async function handler(req: Request): Promise<Response> {
   if (!token || !kvUrl || !kvToken) {
     return new Response('server misconfigured', { status: 500 });
   }
-  const kv = makeKv({ url: kvUrl, token: kvToken });
-  return createMessageHandler({ kv, token })(req);
+  const env: StorageEnv = { url: kvUrl, token: kvToken };
+  const store: MessageStore = {
+    get: () => getCurrentMessage(env),
+    set: (message) => setCurrentMessage(env, message),
+  };
+  return createMessageHandler({ store, token })(req);
 }
 
 export const config = { runtime: 'edge' };
