@@ -75,6 +75,11 @@ describe('getRecentMessages', () => {
     expect(await getRecentMessages({ ...ENV, fetchFn })).toEqual([]);
   });
 
+  it('returns an empty array when Upstash returns result: null (key never existed)', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(new Response(JSON.stringify({ result: null })));
+    expect(await getRecentMessages({ ...ENV, fetchFn })).toEqual([]);
+  });
+
   it('throws on non-2xx', async () => {
     const fetchFn = vi.fn().mockResolvedValue(new Response('boom', { status: 502 }));
     await expect(getRecentMessages({ ...ENV, fetchFn })).rejects.toThrow(/502/);

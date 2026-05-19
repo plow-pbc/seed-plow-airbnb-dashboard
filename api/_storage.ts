@@ -42,6 +42,6 @@ export async function getRecentMessages({
     headers: authHeaders(token),
   });
   if (!res.ok) throw new Error(`KV LRANGE failed: ${res.status}`);
-  const body = (await res.json()) as { result: string[] };
-  return body.result.map((s) => JSON.parse(s) as Message);
+  const body = (await res.json()) as { result: string[] | null };
+  return (body.result ?? []).map((s) => JSON.parse(s) as Message);
 }
