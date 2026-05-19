@@ -117,6 +117,21 @@ describe('createApp', () => {
       await app.fetch(new Request('http://localhost/api/message?'));
       expect(fetcher).toHaveBeenCalledTimes(1);
     });
+
+    it('serves the matching stale body on error — does not bleed across query strings', async () => {
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce('affirmation-body')
+        .mockResolvedValueOnce('alert-body')
+        .mockRejectedValueOnce(new Error('down'));
+      let t = 1_000_000;
+      const app = appWith('fetchMessage', fetcher, { ttlMs: 60_000, now: () => t });
+      await app.fetch(new Request('http://localhost/api/message?type=affirmation'));
+      await app.fetch(new Request('http://localhost/api/message?type=alert'));
+      t += 90_000;
+      const res = await app.fetch(new Request('http://localhost/api/message?type=affirmation'));
+      expect(await res.text()).toBe('affirmation-body');
+    });
   });
 
   // Route-specific miss-behavior (the two routes diverge on what to do when
