@@ -102,7 +102,7 @@ ls ~/.ssh/id_ed25519.pub >/dev/null 2>&1 \
   || ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
 ```
 
-**Step 2.3 — Copy your key to the Pi (you run this one).** `ssh-copy-id` must prompt *you* for the Pi password, so run it yourself in an interactive terminal — in Claude Code, type it after a `!` prefix. Substitute the Pi username and IP from Step 1:
+**Step 2.3 — Copy your key to the Pi (you run this one).** `ssh-copy-id` must prompt *you* for the Pi password, so it needs a real interactive terminal. Run it yourself in a normal terminal application (Terminal.app, iTerm, a Linux terminal emulator) — **not** through Claude Code's `!` prefix, which runs commands non-interactively, captures their output, and gives the password prompt no TTY to read from. Substitute the Pi username and IP from Step 1:
 
 ```sh
 ssh-copy-id <PI_USER>@<PI_IP>
