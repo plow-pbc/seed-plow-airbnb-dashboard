@@ -33,7 +33,7 @@ All shell blocks below are `tier-2`: each MUST be displayed in full and confirme
 
 ### Software
 
-On the **target Pi**: `git`, Node.js ≥ 20.6 with `npm`, `chromium` (at `/usr/bin/chromium`), `systemd`, `curl`, and `sudo` usable **without a password** by the target user (the default on Raspberry Pi OS). Step 3 checks for these and offers to install the missing ones.
+On the **target Pi**: `git`, Node.js ≥ 20.6 with `npm`, `chromium` (at `/usr/bin/chromium`), `systemd`, `curl`, and — **required** — `sudo` usable **without a password** by the target user (the default on Raspberry Pi OS). Step 3 hard-gates on passwordless `sudo` and installs any missing packages.
 
 On the **local machine** (remote mode only): an SSH client (`ssh`, `ssh-keygen`, `ssh-copy-id`) and `sshpass`. Install `sshpass` with the platform package manager if missing (e.g. `brew install sshpass`, `sudo apt-get install -y sshpass`).
 
@@ -119,7 +119,26 @@ ssh -o BatchMode=yes "$PI_USER@$PI_IP" true && echo "key auth OK"
 
 ### Step 3 — Ensure target software ^dep-software
 
-See [[#^act-software]]. Check what the Pi already has:
+See [[#^act-software]].
+
+**Passwordless `sudo` for the target user is REQUIRED** — the package, service-file, and `systemctl` steps all call `sudo`, and `sudo` over a non-interactive `seed_sh` session cannot answer a password prompt. This gate checks it first and **exits non-zero (the install stops here) if it is missing**:
+
+```sh
+source ~/.config/seed-airbnb/install.env
+seed_sh <<'EOF'
+if sudo -n true 2>/dev/null; then
+  echo "passwordless sudo: OK"
+else
+  me=$(id -un)
+  echo "passwordless sudo: MISSING for user '$me' — this is REQUIRED; the install cannot continue." >&2
+  echo "Grant it on the target (you will be prompted for a password once), then re-run this step:" >&2
+  echo "  echo '$me ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/$me >/dev/null && sudo chmod 440 /etc/sudoers.d/$me" >&2
+  exit 1
+fi
+EOF
+```
+
+If that block fails, stop — passwordless `sudo` MUST be in place before continuing. Once it passes, check what the Pi already has:
 
 ```sh
 source ~/.config/seed-airbnb/install.env
@@ -128,7 +147,6 @@ for c in git curl node npm chromium xset; do
   if command -v "$c" >/dev/null 2>&1; then printf '%-9s %s\n' "$c" "$("$c" --version 2>/dev/null | head -n1)"
   else printf '%-9s MISSING\n' "$c"; fi
 done
-sudo -n true 2>/dev/null && echo 'sudo: passwordless OK' || echo 'sudo: NOT passwordless — install will fail'
 EOF
 ```
 
@@ -367,11 +385,11 @@ In remote mode, the agent sets up key-based SSH so later steps run non-interacti
 
 ### Target software is ensured ^act-software
 
-The agent confirms the Pi has the required software and passwordless `sudo`, installing what is missing.
+The agent gates on passwordless `sudo`, then confirms the Pi has the required software, installing what is missing.
 
-1. Run the [[#^dep-software]] check block.
-2. For anything missing — or Node below 20.6 — run the install block (`tier-2` confirmation).
-3. If `sudo` is not passwordless, surface this to the user; the service steps cannot proceed without it.
+1. Run the [[#^dep-software]] passwordless-`sudo` gate. If it exits non-zero, the install MUST stop — terminate with `failure` and report the remediation the block printed.
+2. Run the software inventory check.
+3. For anything missing — or Node below 20.6 — run the install block (`tier-2` confirmation).
 
 ### The dashboard is deployed ^act-deploy-dashboard
 
@@ -459,7 +477,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
 
 ## Open
 
-- Passwordless `sudo` for the target user is assumed (the Raspberry Pi OS default). A Pi configured otherwise will fail the service steps — `sudo` over a non-interactive SSH session cannot answer a password prompt. ^o-sudo
+- Passwordless `sudo` for the target user is required and is hard-gated at the start of Step 3. The SEED cannot grant it automatically — that needs the user's password — so a failing gate stops the install with remediation instructions. ^o-sudo
 - The repo also ships `yodeck-kiosk.service`, which competes with `family-kiosk.service` for the display. This SEED does not disable it; if both are enabled, disable Yodeck manually (`sudo systemctl disable --now yodeck-kiosk.service`). ^o-yodeck
 - The kiosk unit calls Chromium at `/usr/bin/chromium`. Some images ship it as `chromium-browser` — adjust the unit's `ExecStart` if so. ^o-chromium
 - Step 5 detects `DISPLAY`/`XAUTHORITY` from whatever graphical session is live at install time. If that session is ephemeral — an xrdp/XVNC login, a Wayland greeter's XWayland — the values may not survive a reboot; a persistent boot kiosk needs console autologin so a stable session exists. Re-run the Step 5 detection block after configuring that. ^o-display
