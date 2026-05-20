@@ -184,7 +184,7 @@ mkdir -p "$(dirname "$DASH_DIR")"
 if [ -d "$DASH_DIR/.git" ]; then
   git -C "$DASH_DIR" pull --ff-only
 else
-  git clone https://github.com/plow-pbc/seed-airbnb-dashboard.git "$DASH_DIR"
+  git clone https://github.com/plow-pbc/seed-plow-airbnb-dashboard.git "$DASH_DIR"
 fi
 EOF
 ```
@@ -352,7 +352,7 @@ The named entities that exist once [[#^act-deploy-kiosk]] completes.
 
 ### Deploy directory ^obj-dash-dir
 
-- `/home/<target-user>/services/plow-airbnb-dashboard` on [[#^obj-target]] — the clone of `https://github.com/plow-pbc/seed-airbnb-dashboard.git`, built (`npm run build`) and configured.
+- `/home/<target-user>/services/plow-airbnb-dashboard` on [[#^obj-target]] — the clone of `https://github.com/plow-pbc/seed-plow-airbnb-dashboard.git`, built (`npm run build`) and configured.
 
 ### Environment file ^obj-env
 
