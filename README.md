@@ -49,19 +49,12 @@ curl -s http://localhost:5174/healthz            # should print "ok"
 
 ### Pointing the kiosk at the dashboard
 
-The repo ships two Chromium-launcher units: `yodeck-kiosk.service` (points at Yodeck) and `plow-airbnb-kiosk.service` (points at `http://localhost:5174`). Only one runs at a time — both want the display. Install both and swap between them as needed:
+The repo ships `plow-airbnb-kiosk.service`, a Chromium-launcher unit pointed at `http://localhost:5174`. Install and enable it:
 
 ```sh
-sudo cp yodeck-kiosk.service plow-airbnb-kiosk.service /etc/systemd/system/
+sudo cp plow-airbnb-kiosk.service /etc/systemd/system/
 sudo systemctl daemon-reload
-
-# Activate the Plow Airbnb dashboard (and disable Yodeck):
-sudo systemctl disable --now yodeck-kiosk.service
 sudo systemctl enable --now plow-airbnb-kiosk.service
-
-# Or flip back to Yodeck:
-sudo systemctl disable --now plow-airbnb-kiosk.service
-sudo systemctl enable --now yodeck-kiosk.service
 ```
 
 `plow-airbnb-kiosk.service` orders itself `After=plow-airbnb-dashboard.service` so the proxy is up by the time Chromium opens the URL.

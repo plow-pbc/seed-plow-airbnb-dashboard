@@ -485,7 +485,6 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
 ## Open
 
 - Passwordless `sudo` for the target user is required and is hard-gated at the start of Step 3. The SEED cannot grant it automatically — that needs the user's password — so a failing gate stops the install with remediation instructions. ^o-sudo
-- The repo also ships `yodeck-kiosk.service`, which competes with `plow-airbnb-kiosk.service` for the display. This SEED does not disable it; if both are enabled, disable Yodeck manually (`sudo systemctl disable --now yodeck-kiosk.service`). ^o-yodeck
 - The kiosk unit calls Chromium at `/usr/bin/chromium`. Some images ship it as `chromium-browser` — adjust the unit's `ExecStart` if so. ^o-chromium
 - Step 5 detects `DISPLAY`/`XAUTHORITY` from whatever graphical session is live at install time. If that session is ephemeral — an xrdp/XVNC login, a Wayland greeter's XWayland — the values may not survive a reboot; a persistent boot kiosk needs console autologin so a stable session exists. Re-run the Step 5 detection block after configuring that. ^o-display
 - No uninstall path. Removing the install is manual: `systemctl disable --now` both units, delete them from `/etc/systemd/system/`, and delete the deploy directory. ^o-uninstall
