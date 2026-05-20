@@ -1,6 +1,12 @@
 # family-dashboard
 
-Tiny React app that shows the next 12 events from a shared Google Calendar, served by a Node proxy on the kiosk box.
+## Purpose
+
+Tiny React app that shows the next 12 events from a shared Google Calendar, served by a Node proxy on the kiosk box. On a Raspberry Pi it runs as a systemd service behind a companion Chromium kiosk unit that displays it full-screen.
+
+## Install
+
+This repo is a [SEED](https://github.com/plow-pbc/seed) — `SEED.md` describes a one-time, agent-driven install of the dashboard + kiosk onto a Raspberry Pi, either locally or remotely over SSH. The equivalent manual steps are under [Kiosk deploy](#kiosk-deploy-raspberry-pi) below.
 
 ## Local dev
 
