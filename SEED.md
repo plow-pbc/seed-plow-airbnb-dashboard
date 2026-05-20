@@ -124,7 +124,7 @@ See [[#^act-software]]. Check what the Pi already has:
 ```sh
 source ~/.config/seed-airbnb/install.env
 seed_sh <<'EOF'
-for c in git curl node npm chromium; do
+for c in git curl node npm chromium xset; do
   if command -v "$c" >/dev/null 2>&1; then printf '%-9s %s\n' "$c" "$("$c" --version 2>/dev/null | head -n1)"
   else printf '%-9s MISSING\n' "$c"; fi
 done
@@ -132,7 +132,7 @@ sudo -n true 2>/dev/null && echo 'sudo: passwordless OK' || echo 'sudo: NOT pass
 EOF
 ```
 
-Run the install block **only for what is missing or for Node below 20.6**. It adds the NodeSource Node 20 LTS repo and installs packages via `apt`:
+Run the install block **only for what is missing or for Node below 20.6**. It adds the NodeSource Node 20 LTS repo and installs packages via `apt` — including `x11-xserver-utils`, whose `xset` lets Step 5 validate the kiosk display:
 
 ```sh
 source ~/.config/seed-airbnb/install.env
@@ -140,7 +140,7 @@ seed_sh <<'EOF'
 set -eu
 sudo apt-get update
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs git curl chromium
+sudo apt-get install -y nodejs git curl chromium x11-xserver-utils
 EOF
 ```
 
@@ -223,14 +223,73 @@ EOF
 
 See [[#^act-deploy-kiosk]].
 
-Replace the placeholder `odio` username throughout `family-kiosk.service`:
+The shipped `family-kiosk.service` hardcodes `Environment=DISPLAY=:0` and `Environment=XAUTHORITY=/home/odio/.Xauthority`. Those defaults suit a Raspberry Pi's console session but are wrong for many setups — an xrdp/XVNC session runs on `:10` or higher, a Wayland greeter parks XWayland elsewhere, and the X authority file is rarely at `~/.Xauthority`. This step **detects** the values from the target user's live graphical session and **rewrites** the unit, rather than trusting the defaults.
+
+First, detect the session. This block inspects the environment of the target user's running session / window-manager process, validates the pair against the X server with `xset`, and records the result in `~/.config/seed-airbnb/kiosk.env` on the target:
+
+```sh
+source ~/.config/seed-airbnb/install.env
+seed_sh <<'EOF'
+set -u
+u="$TARGET_USER"
+mkdir -p ~/.config/seed-airbnb
+disp= ; xauth= ; wl= ; via=
+for pat in xfce4-session gnome-session cinnamon-session mate-session lxqt-session \
+           lxsession plasmashell xfwm4 mutter marco kwin_x11 openbox; do
+  for pid in $(pgrep -u "$u" -f "$pat" 2>/dev/null); do
+    e=$( { cat "/proc/$pid/environ" 2>/dev/null || sudo cat "/proc/$pid/environ" 2>/dev/null; } | tr '\0' '\n')
+    [ -z "$e" ] && continue
+    d=$(printf '%s\n' "$e" | sed -n 's/^DISPLAY=//p'         | head -n1)
+    x=$(printf '%s\n' "$e" | sed -n 's/^XAUTHORITY=//p'      | head -n1)
+    w=$(printf '%s\n' "$e" | sed -n 's/^WAYLAND_DISPLAY=//p' | head -n1)
+    if [ -n "$d" ]; then disp=$d; xauth=$x; wl=$w; via="$pat (pid $pid)"; break 2; fi
+  done
+done
+if [ -n "$disp" ] && [ -z "$xauth" ]; then
+  for cand in "/home/$u/.Xauthority" "/run/user/$(id -u "$u" 2>/dev/null)/gdm/Xauthority"; do
+    [ -f "$cand" ] && { xauth=$cand; break; }
+  done
+fi
+verdict=UNVERIFIED
+if [ -n "$disp" ] && command -v xset >/dev/null 2>&1; then
+  if sudo -u "$u" env DISPLAY="$disp" XAUTHORITY="$xauth" xset q >/dev/null 2>&1
+  then verdict=OK; else verdict=UNREACHABLE; fi
+fi
+cat > ~/.config/seed-airbnb/kiosk.env <<KE
+KIOSK_DISPLAY=$disp
+KIOSK_XAUTHORITY=$xauth
+KE
+echo "detected via : ${via:-<none>}"
+echo "DISPLAY      : ${disp:-<none>}"
+echo "XAUTHORITY   : ${xauth:-<none>}"
+echo "WAYLAND      : ${wl:-<none>}"
+echo "X sockets    : $(ls /tmp/.X11-unix/ 2>/dev/null | tr '\n' ' ')"
+echo "verdict      : $verdict"
+EOF
+```
+
+Review the output (`tier-2`):
+
+- **`verdict: OK`** — the detected pair reaches the X server. Continue.
+- **`verdict: UNVERIFIED`** — `xset` is absent, so the pair could not be tested; the detected values are still the best guess. Continue, but expect to revisit if the kiosk fails.
+- **`verdict: UNREACHABLE`, or `DISPLAY: <none>`** — detection failed, most often because no graphical session is logged in right now. Do not guess. Ask the user (`tier-3`) for the correct `DISPLAY` and `XAUTHORITY`, then write them into `~/.config/seed-airbnb/kiosk.env` on the target (`KIOSK_DISPLAY=` / `KIOSK_XAUTHORITY=`) before continuing.
+
+Then patch the unit — swap the `odio` username and rewrite the display/auth lines from the detected values:
 
 ```sh
 source ~/.config/seed-airbnb/install.env
 seed_sh <<'EOF'
 set -eu
 cd "$DASH_DIR"
+. ~/.config/seed-airbnb/kiosk.env
+[ -n "${KIOSK_DISPLAY:-}" ] || { echo "KIOSK_DISPLAY is empty — set it in ~/.config/seed-airbnb/kiosk.env first"; exit 1; }
 sed -i "s/odio/$TARGET_USER/g" family-kiosk.service
+sed -i "s|^Environment=DISPLAY=.*|Environment=DISPLAY=$KIOSK_DISPLAY|" family-kiosk.service
+if [ -n "${KIOSK_XAUTHORITY:-}" ]; then
+  sed -i "s|^Environment=XAUTHORITY=.*|Environment=XAUTHORITY=$KIOSK_XAUTHORITY|" family-kiosk.service
+else
+  sed -i "/^Environment=XAUTHORITY=/d" family-kiosk.service
+fi
 grep -nE 'User|Environment|ExecStart' family-kiosk.service
 EOF
 ```
@@ -251,7 +310,7 @@ echo "is-active: $(systemctl is-active family-kiosk.service || true)"
 EOF
 ```
 
-`is-active` MUST print `active`. If it does not, stop — the install has failed.
+`is-active` MUST print `active`. If it does not, stop — the install has failed; the most likely cause is a wrong `DISPLAY`/`XAUTHORITY`, so re-run the detection block (or correct `kiosk.env`), patch again, and `sudo systemctl restart family-kiosk.service`.
 
 ## Objects
 
@@ -327,11 +386,13 @@ The agent installs and starts [[#^obj-dashboard-service]].
 
 ### The kiosk is deployed ^act-deploy-kiosk
 
-The agent installs and starts [[#^obj-kiosk-service]].
+The agent installs and starts [[#^obj-kiosk-service]], correcting its display settings for the actual target rather than trusting the shipped `:0` / `~/.Xauthority` defaults.
 
-1. Replace `odio` with the target user throughout `family-kiosk.service`.
-2. Copy the unit to `/etc/systemd/system/`, `daemon-reload`, `enable --now`.
-3. Confirm `systemctl is-active` is `active`. Per [[#^dep-kiosk]].
+1. Detect the target user's live graphical session — `DISPLAY` and `XAUTHORITY` — and validate the pair reaches an X server.
+2. Confirm the detected values (`tier-2`); if detection failed, ask the user for them (`tier-3`).
+3. Replace `odio` with the target user, and rewrite the `DISPLAY`/`XAUTHORITY` lines of `family-kiosk.service` from the detected values.
+4. Copy the unit to `/etc/systemd/system/`, `daemon-reload`, `enable --now`.
+5. Confirm `systemctl is-active` is `active`. Per [[#^dep-kiosk]].
 
 ## Verify
 
@@ -400,7 +461,8 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
 
 - Passwordless `sudo` for the target user is assumed (the Raspberry Pi OS default). A Pi configured otherwise will fail the service steps — `sudo` over a non-interactive SSH session cannot answer a password prompt. ^o-sudo
 - The repo also ships `yodeck-kiosk.service`, which competes with `family-kiosk.service` for the display. This SEED does not disable it; if both are enabled, disable Yodeck manually (`sudo systemctl disable --now yodeck-kiosk.service`). ^o-yodeck
-- The kiosk unit expects Chromium at `/usr/bin/chromium` and a graphical session on `:0`. Some Raspberry Pi OS images ship `chromium-browser` instead, or run headless — adjust the unit if so. ^o-chromium
+- The kiosk unit calls Chromium at `/usr/bin/chromium`. Some images ship it as `chromium-browser` — adjust the unit's `ExecStart` if so. ^o-chromium
+- Step 5 detects `DISPLAY`/`XAUTHORITY` from whatever graphical session is live at install time. If that session is ephemeral — an xrdp/XVNC login, a Wayland greeter's XWayland — the values may not survive a reboot; a persistent boot kiosk needs console autologin so a stable session exists. Re-run the Step 5 detection block after configuring that. ^o-display
 - No uninstall path. Removing the install is manual: `systemctl disable --now` both units, delete them from `/etc/systemd/system/`, and delete the deploy directory. ^o-uninstall
 
 ## Non-Goals
