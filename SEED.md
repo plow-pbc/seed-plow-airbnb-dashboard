@@ -62,9 +62,11 @@ PI_IP=                             # remote only — the Pi IPv4 address
 DASH_DIR="/home/$TARGET_USER/services/plow-airbnb-dashboard"
 
 # Run a script (read from stdin) on the target machine.
+# remote mode authenticates with the dedicated install key minted in Step 2.
 seed_sh() {
   if [ "$INSTALL_MODE" = remote ]; then
-    ssh -o StrictHostKeyChecking=accept-new "$PI_USER@$PI_IP" \
+    ssh -i "$HOME/.ssh/id_ed25519_seed_airbnb" -o IdentitiesOnly=yes \
+        -o StrictHostKeyChecking=accept-new "$PI_USER@$PI_IP" \
         "TARGET_USER=$(printf %q "$TARGET_USER") DASH_DIR=$(printf %q "$DASH_DIR") bash -s"
   else
     TARGET_USER="$TARGET_USER" DASH_DIR="$DASH_DIR" bash -s
@@ -83,29 +85,30 @@ grep -E '^(INSTALL_MODE|TARGET_USER|PI_USER|PI_IP)=' ~/.config/seed-airbnb/insta
 
 **remote mode only — skip this step entirely for a local install.** See [[#^act-link]].
 
-A remote install runs every later step over SSH non-interactively, so the Pi must accept this machine's SSH **key** — no password prompts. The standard tool is `ssh-copy-id`: it asks for the Pi password **once**, installs your public key, and from then on SSH logs in with no password. You run that one command yourself, so the password goes straight into `ssh-copy-id` and never passes through the agent.
+A remote install runs every later step over SSH non-interactively, so the Pi must accept an SSH **key** with no password prompt. This SEED uses a **dedicated, passphrase-less install key** — `~/.ssh/id_ed25519_seed_airbnb`, minted just for this job — and never your personal key. A throwaway key for a one-time install is guaranteed passphrase-less (so `ssh-agent` state is irrelevant and no passphrase prompt can stall a step), leaves your real key untouched, and keeps exactly one known key in play. `ssh-copy-id` installs it on the Pi after a single password entry; every later `ssh` then pins it with `-i ... -o IdentitiesOnly=yes`, so no other key is ever offered. You run `ssh-copy-id` yourself, so the password goes straight into it and never passes through the agent. The key is removable once the install is done — see [[#^o-install-key]].
 
 **Step 2.1 — Is it already set up?** The agent runs this. If it prints `already passwordless`, skip straight to Step 3:
 
 ```sh
 source ~/.config/seed-airbnb/install.env
-ssh -o BatchMode=yes -o ConnectTimeout=5 "$PI_USER@$PI_IP" true \
+ssh -i ~/.ssh/id_ed25519_seed_airbnb -o IdentitiesOnly=yes \
+    -o BatchMode=yes -o ConnectTimeout=5 "$PI_USER@$PI_IP" true \
   && echo "already passwordless — skip to Step 3" \
   || echo "not set up yet — continue with Steps 2.2-2.4"
 ```
 
-**Step 2.2 — Make sure this machine has an SSH key.** The agent runs this; it creates an `ed25519` keypair only if you do not already have one:
+**Step 2.2 — Mint the dedicated install key.** The agent runs this. It creates a passphrase-less `ed25519` keypair reserved for this install — `~/.ssh/id_ed25519_seed_airbnb` — generating it only if it is not already there. This SEED never reads, reuses, or depends on your personal `~/.ssh/id_ed25519`:
 
 ```sh
-ls ~/.ssh/id_ed25519.pub >/dev/null 2>&1 \
-  && echo "SSH key already present" \
-  || ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
+ls ~/.ssh/id_ed25519_seed_airbnb.pub >/dev/null 2>&1 \
+  && echo "install key already present — reusing it" \
+  || ssh-keygen -t ed25519 -N '' -C seed-airbnb-install -f ~/.ssh/id_ed25519_seed_airbnb
 ```
 
-**Step 2.3 — Copy your key to the Pi (you run this one).** `ssh-copy-id` must prompt *you* for the Pi password, so it needs a real interactive terminal. Run it yourself in a normal terminal application (Terminal.app, iTerm, a Linux terminal emulator) — **not** through Claude Code's `!` prefix, which runs commands non-interactively, captures their output, and gives the password prompt no TTY to read from. Substitute the Pi username and IP from Step 1:
+**Step 2.3 — Copy the install key to the Pi (you run this one).** `ssh-copy-id` must prompt *you* for the Pi password, so it needs a real interactive terminal. Run it yourself in a normal terminal application (Terminal.app, iTerm, a Linux terminal emulator) — **not** through Claude Code's `!` prefix, which runs commands non-interactively, captures their output, and gives the password prompt no TTY to read from. The `-i` flag installs exactly the dedicated key from Step 2.2 and `IdentitiesOnly=yes` keeps your other keys out of the connection, so the password prompt is reached cleanly. Substitute the Pi username and IP from Step 1:
 
 ```sh
-ssh-copy-id <PI_USER>@<PI_IP>
+ssh-copy-id -i ~/.ssh/id_ed25519_seed_airbnb.pub -o IdentitiesOnly=yes <PI_USER>@<PI_IP>
 ```
 
 On the first connection it asks `Are you sure you want to continue connecting?` — type `yes`. Then at `<PI_USER>@<PI_IP>'s password:` type the Pi password. Success prints `Number of key(s) added: 1`.
@@ -113,17 +116,26 @@ On the first connection it asks `Are you sure you want to continue connecting?` 
 If `ssh-copy-id` is not installed, the same thing by hand (run it yourself, enter the password when prompted):
 
 ```sh
-cat ~/.ssh/id_ed25519.pub | ssh <PI_USER>@<PI_IP> 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
+cat ~/.ssh/id_ed25519_seed_airbnb.pub | ssh -i ~/.ssh/id_ed25519_seed_airbnb -o IdentitiesOnly=yes <PI_USER>@<PI_IP> 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
 ```
 
 **Step 2.4 — Confirm passwordless login works.** The agent runs this; it MUST print `passwordless SSH OK` with no password prompt:
 
 ```sh
 source ~/.config/seed-airbnb/install.env
-ssh -o BatchMode=yes "$PI_USER@$PI_IP" true && echo "passwordless SSH OK"
+ssh -i ~/.ssh/id_ed25519_seed_airbnb -o IdentitiesOnly=yes \
+    -o BatchMode=yes "$PI_USER@$PI_IP" true && echo "passwordless SSH OK"
 ```
 
-If this still asks for a password or fails, repeat Step 2.3.
+If this fails, triage in one command — `ssh -v` prints a `Server accepts key` line when the Pi already holds the key:
+
+```sh
+source ~/.config/seed-airbnb/install.env
+ssh -v -i ~/.ssh/id_ed25519_seed_airbnb -o IdentitiesOnly=yes -o BatchMode=yes \
+    "$PI_USER@$PI_IP" true 2>&1 | grep -i 'Server accepts key' || echo 'absent — key not accepted'
+```
+
+If the `Server accepts key` line is **present**, the Pi has the key and the fault is client-side (wrong key path, or permissions on `~/.ssh/id_ed25519_seed_airbnb`). If it is **absent**, the key never reached the Pi — server-side — so repeat Step 2.3.
 
 ### Step 3 — Ensure target software ^dep-software
 
@@ -386,8 +398,8 @@ In remote mode, the agent walks the user through setting up passwordless, key-ba
 
 1. Skip this Action entirely in local mode.
 2. Check whether passwordless SSH already works; if so, skip ahead to [[#^act-software]].
-3. Ensure this machine has an SSH keypair (create an `ed25519` key if none exists).
-4. Direct the **user** to run `ssh-copy-id <PI_USER>@<PI_IP>` themselves in an interactive terminal and enter the Pi password once (`tier-3`); the password goes to `ssh-copy-id`, never to the agent.
+3. Mint a dedicated, passphrase-less `ed25519` install key — `~/.ssh/id_ed25519_seed_airbnb` — if it is not already present; the user's personal key is never read or used.
+4. Direct the **user** to run `ssh-copy-id -i ~/.ssh/id_ed25519_seed_airbnb.pub <PI_USER>@<PI_IP>` themselves in a real terminal application and enter the Pi password once (`tier-3`); the password goes to `ssh-copy-id`, never to the agent.
 5. Confirm passwordless SSH works (`ssh -o BatchMode=yes`). Per [[#^dep-link]].
 
 ### Target software is ensured ^act-software
@@ -487,6 +499,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
 - Passwordless `sudo` for the target user is required and is hard-gated at the start of Step 3. The SEED cannot grant it automatically — that needs the user's password — so a failing gate stops the install with remediation instructions. ^o-sudo
 - The kiosk unit calls Chromium at `/usr/bin/chromium`. Some images ship it as `chromium-browser` — adjust the unit's `ExecStart` if so. ^o-chromium
 - Step 5 detects `DISPLAY`/`XAUTHORITY` from whatever graphical session is live at install time. If that session is ephemeral — an xrdp/XVNC login, a Wayland greeter's XWayland — the values may not survive a reboot; a persistent boot kiosk needs console autologin so a stable session exists. Re-run the Step 5 detection block after configuring that. ^o-display
+- **remote mode only:** Step 2 mints a dedicated SSH key, `~/.ssh/id_ed25519_seed_airbnb`, used only to drive this one-time install. Once the install — and `## Verify` — is complete it is safe to remove: delete the keypair on this machine (`rm ~/.ssh/id_ed25519_seed_airbnb ~/.ssh/id_ed25519_seed_airbnb.pub`) and strip its line — the one ending `seed-airbnb-install` — from `~/.ssh/authorized_keys` on the Pi. The dashboard and kiosk services need no SSH; only the install does. ^o-install-key
 - No uninstall path. Removing the install is manual: `systemctl disable --now` both units, delete them from `/etc/systemd/system/`, and delete the deploy directory. ^o-uninstall
 
 ## Non-Goals
