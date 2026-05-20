@@ -8,7 +8,7 @@ The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RE
 
 ## Dependencies
 
-This SEED performs a **one-time install** of the family-dashboard calendar kiosk onto a single Raspberry Pi. The install runs in one of two modes, chosen by the user (`tier-2`):
+This SEED performs a **one-time install** of the plow-airbnb-dashboard calendar kiosk onto a single Raspberry Pi. The install runs in one of two modes, chosen by the user (`tier-2`):
 
 - **local** — the Pi is *this* machine; every deploy command runs in a local shell.
 - **remote** — the Pi is reached over the network; every deploy command runs on it over SSH from this machine.
@@ -59,7 +59,7 @@ INSTALL_MODE=local                 # 'local' or 'remote'
 TARGET_USER=pi                     # local: output of `id -un`; remote: the Pi username
 PI_USER=                           # remote only — the Pi login user
 PI_IP=                             # remote only — the Pi IPv4 address
-DASH_DIR="/home/$TARGET_USER/services/family-dashboard"
+DASH_DIR="/home/$TARGET_USER/services/plow-airbnb-dashboard"
 
 # Run a script (read from stdin) on the target machine.
 seed_sh() {
@@ -214,15 +214,15 @@ chmod 600 .env
 EOF
 ```
 
-Replace the placeholder `odio` username throughout `family-dashboard.service` with the target user:
+Replace the placeholder `odio` username throughout `plow-airbnb-dashboard.service` with the target user:
 
 ```sh
 source ~/.config/seed-airbnb/install.env
 seed_sh <<'EOF'
 set -eu
 cd "$DASH_DIR"
-sed -i "s/odio/$TARGET_USER/g" family-dashboard.service
-grep -nE 'User|WorkingDirectory|ExecStart' family-dashboard.service
+sed -i "s/odio/$TARGET_USER/g" plow-airbnb-dashboard.service
+grep -nE 'User|WorkingDirectory|ExecStart' plow-airbnb-dashboard.service
 EOF
 ```
 
@@ -233,12 +233,12 @@ source ~/.config/seed-airbnb/install.env
 seed_sh <<'EOF'
 set -eu
 cd "$DASH_DIR"
-sudo cp family-dashboard.service /etc/systemd/system/
+sudo cp plow-airbnb-dashboard.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now family-dashboard.service || true
+sudo systemctl enable --now plow-airbnb-dashboard.service || true
 sleep 2
-sudo systemctl --no-pager status family-dashboard.service || true
-echo "is-active: $(systemctl is-active family-dashboard.service || true)"
+sudo systemctl --no-pager status plow-airbnb-dashboard.service || true
+echo "is-active: $(systemctl is-active plow-airbnb-dashboard.service || true)"
 echo "healthz:   $(curl -s http://localhost:5174/healthz || echo FAILED)"
 EOF
 ```
@@ -249,7 +249,7 @@ EOF
 
 See [[#^act-deploy-kiosk]].
 
-The shipped `family-kiosk.service` hardcodes `Environment=DISPLAY=:0` and `Environment=XAUTHORITY=/home/odio/.Xauthority`. Those defaults suit a Raspberry Pi's console session but are wrong for many setups — an xrdp/XVNC session runs on `:10` or higher, a Wayland greeter parks XWayland elsewhere, and the X authority file is rarely at `~/.Xauthority`. This step **detects** the values from the target user's live graphical session and **rewrites** the unit, rather than trusting the defaults.
+The shipped `plow-airbnb-kiosk.service` hardcodes `Environment=DISPLAY=:0` and `Environment=XAUTHORITY=/home/odio/.Xauthority`. Those defaults suit a Raspberry Pi's console session but are wrong for many setups — an xrdp/XVNC session runs on `:10` or higher, a Wayland greeter parks XWayland elsewhere, and the X authority file is rarely at `~/.Xauthority`. This step **detects** the values from the target user's live graphical session and **rewrites** the unit, rather than trusting the defaults.
 
 First, detect the session. This block inspects the environment of the target user's running session / window-manager process, validates the pair against the X server with `xset`, and records the result in `~/.config/seed-airbnb/kiosk.env` on the target:
 
@@ -309,14 +309,14 @@ set -eu
 cd "$DASH_DIR"
 . ~/.config/seed-airbnb/kiosk.env
 [ -n "${KIOSK_DISPLAY:-}" ] || { echo "KIOSK_DISPLAY is empty — set it in ~/.config/seed-airbnb/kiosk.env first"; exit 1; }
-sed -i "s/odio/$TARGET_USER/g" family-kiosk.service
-sed -i "s|^Environment=DISPLAY=.*|Environment=DISPLAY=$KIOSK_DISPLAY|" family-kiosk.service
+sed -i "s/odio/$TARGET_USER/g" plow-airbnb-kiosk.service
+sed -i "s|^Environment=DISPLAY=.*|Environment=DISPLAY=$KIOSK_DISPLAY|" plow-airbnb-kiosk.service
 if [ -n "${KIOSK_XAUTHORITY:-}" ]; then
-  sed -i "s|^Environment=XAUTHORITY=.*|Environment=XAUTHORITY=$KIOSK_XAUTHORITY|" family-kiosk.service
+  sed -i "s|^Environment=XAUTHORITY=.*|Environment=XAUTHORITY=$KIOSK_XAUTHORITY|" plow-airbnb-kiosk.service
 else
-  sed -i "/^Environment=XAUTHORITY=/d" family-kiosk.service
+  sed -i "/^Environment=XAUTHORITY=/d" plow-airbnb-kiosk.service
 fi
-grep -nE 'User|Environment|ExecStart' family-kiosk.service
+grep -nE 'User|Environment|ExecStart' plow-airbnb-kiosk.service
 EOF
 ```
 
@@ -327,16 +327,16 @@ source ~/.config/seed-airbnb/install.env
 seed_sh <<'EOF'
 set -eu
 cd "$DASH_DIR"
-sudo cp family-kiosk.service /etc/systemd/system/
+sudo cp plow-airbnb-kiosk.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now family-kiosk.service || true
+sudo systemctl enable --now plow-airbnb-kiosk.service || true
 sleep 2
-sudo systemctl --no-pager status family-kiosk.service || true
-echo "is-active: $(systemctl is-active family-kiosk.service || true)"
+sudo systemctl --no-pager status plow-airbnb-kiosk.service || true
+echo "is-active: $(systemctl is-active plow-airbnb-kiosk.service || true)"
 EOF
 ```
 
-`is-active` MUST print `active`. If it does not, stop — the install has failed; the most likely cause is a wrong `DISPLAY`/`XAUTHORITY`, so re-run the detection block (or correct `kiosk.env`), patch again, and `sudo systemctl restart family-kiosk.service`.
+`is-active` MUST print `active`. If it does not, stop — the install has failed; the most likely cause is a wrong `DISPLAY`/`XAUTHORITY`, so re-run the detection block (or correct `kiosk.env`), patch again, and `sudo systemctl restart plow-airbnb-kiosk.service`.
 
 ## Objects
 
@@ -352,7 +352,7 @@ The named entities that exist once [[#^act-deploy-kiosk]] completes.
 
 ### Deploy directory ^obj-dash-dir
 
-- `/home/<target-user>/services/family-dashboard` on [[#^obj-target]] — the clone of `https://github.com/plow-pbc/seed-airbnb-dashboard.git`, built (`npm run build`) and configured.
+- `/home/<target-user>/services/plow-airbnb-dashboard` on [[#^obj-target]] — the clone of `https://github.com/plow-pbc/seed-airbnb-dashboard.git`, built (`npm run build`) and configured.
 
 ### Environment file ^obj-env
 
@@ -360,11 +360,11 @@ The named entities that exist once [[#^act-deploy-kiosk]] completes.
 
 ### Dashboard service ^obj-dashboard-service
 
-- `family-dashboard.service`, a `systemd` unit at `/etc/systemd/system/`. Runs the Node proxy plus the built SPA as the target user, listening on `http://localhost:5174`, and exposes `/healthz`.
+- `plow-airbnb-dashboard.service`, a `systemd` unit at `/etc/systemd/system/`. Runs the Node proxy plus the built SPA as the target user, listening on `http://localhost:5174`, and exposes `/healthz`.
 
 ### Kiosk service ^obj-kiosk-service
 
-- `family-kiosk.service`, a `systemd` unit at `/etc/systemd/system/`. Launches Chromium in kiosk mode against `http://localhost:5174`, ordered `After=family-dashboard.service`.
+- `plow-airbnb-kiosk.service`, a `systemd` unit at `/etc/systemd/system/`. Launches Chromium in kiosk mode against `http://localhost:5174`, ordered `After=plow-airbnb-dashboard.service`.
 
 ## Actions
 
@@ -405,7 +405,7 @@ The agent installs and starts [[#^obj-dashboard-service]].
 1. Clone or update [[#^obj-dash-dir]] on the target.
 2. Run `npm ci` and `npm run build`.
 3. Create [[#^obj-env]] from `.env.example`, `chmod 600` it, and set `ICAL_URL`.
-4. Replace `odio` with the target user throughout `family-dashboard.service`.
+4. Replace `odio` with the target user throughout `plow-airbnb-dashboard.service`.
 5. Copy the unit to `/etc/systemd/system/`, `daemon-reload`, `enable --now`.
 6. Confirm `systemctl is-active` is `active` and `/healthz` returns `ok`. Per [[#^dep-dashboard]].
 
@@ -415,7 +415,7 @@ The agent installs and starts [[#^obj-kiosk-service]], correcting its display se
 
 1. Detect the target user's live graphical session — `DISPLAY` and `XAUTHORITY` — and validate the pair reaches an X server.
 2. Confirm the detected values (`tier-2`); if detection failed, ask the user for them (`tier-3`).
-3. Replace `odio` with the target user, and rewrite the `DISPLAY`/`XAUTHORITY` lines of `family-kiosk.service` from the detected values.
+3. Replace `odio` with the target user, and rewrite the `DISPLAY`/`XAUTHORITY` lines of `plow-airbnb-kiosk.service` from the detected values.
 4. Copy the unit to `/etc/systemd/system/`, `daemon-reload`, `enable --now`.
 5. Confirm `systemctl is-active` is `active`. Per [[#^dep-kiosk]].
 
@@ -428,7 +428,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
    ```sh
    source ~/.config/seed-airbnb/install.env
    seed_sh <<'EOF'
-   systemctl is-active family-dashboard.service
+   systemctl is-active plow-airbnb-dashboard.service
    EOF
    ```
 
@@ -461,7 +461,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
    ```sh
    source ~/.config/seed-airbnb/install.env
    seed_sh <<'EOF'
-   grep -l odio /etc/systemd/system/family-dashboard.service /etc/systemd/system/family-kiosk.service 2>/dev/null && echo FOUND-odio || echo clean
+   grep -l odio /etc/systemd/system/plow-airbnb-dashboard.service /etc/systemd/system/plow-airbnb-kiosk.service 2>/dev/null && echo FOUND-odio || echo clean
    EOF
    ```
 
@@ -472,7 +472,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
    ```sh
    source ~/.config/seed-airbnb/install.env
    seed_sh <<'EOF'
-   systemctl is-active family-kiosk.service
+   systemctl is-active plow-airbnb-kiosk.service
    EOF
    ```
 
@@ -485,7 +485,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
 ## Open
 
 - Passwordless `sudo` for the target user is required and is hard-gated at the start of Step 3. The SEED cannot grant it automatically — that needs the user's password — so a failing gate stops the install with remediation instructions. ^o-sudo
-- The repo also ships `yodeck-kiosk.service`, which competes with `family-kiosk.service` for the display. This SEED does not disable it; if both are enabled, disable Yodeck manually (`sudo systemctl disable --now yodeck-kiosk.service`). ^o-yodeck
+- The repo also ships `yodeck-kiosk.service`, which competes with `plow-airbnb-kiosk.service` for the display. This SEED does not disable it; if both are enabled, disable Yodeck manually (`sudo systemctl disable --now yodeck-kiosk.service`). ^o-yodeck
 - The kiosk unit calls Chromium at `/usr/bin/chromium`. Some images ship it as `chromium-browser` — adjust the unit's `ExecStart` if so. ^o-chromium
 - Step 5 detects `DISPLAY`/`XAUTHORITY` from whatever graphical session is live at install time. If that session is ephemeral — an xrdp/XVNC login, a Wayland greeter's XWayland — the values may not survive a reboot; a persistent boot kiosk needs console autologin so a stable session exists. Re-run the Step 5 detection block after configuring that. ^o-display
 - No uninstall path. Removing the install is manual: `systemctl disable --now` both units, delete them from `/etc/systemd/system/`, and delete the deploy directory. ^o-uninstall

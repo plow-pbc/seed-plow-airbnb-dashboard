@@ -4,7 +4,7 @@ type Props = { message: MessageType };
 
 export function Message({ message }: Props) {
   return (
-    <section className="message-card" aria-label="Family message">
+    <section className="message-card" aria-label="Plow Airbnb message">
       <p className="message-text">{message.text}</p>
     </section>
   );

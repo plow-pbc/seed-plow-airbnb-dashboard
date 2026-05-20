@@ -1,6 +1,6 @@
 [Unit]
-Description=Family Calendar Kiosk Mode
-After=network-online.target graphical.target family-dashboard.service
+Description=Plow Airbnb Calendar Kiosk Mode
+After=network-online.target graphical.target plow-airbnb-dashboard.service
 Wants=network-online.target
 
 [Service]

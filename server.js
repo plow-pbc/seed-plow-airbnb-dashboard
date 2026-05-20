@@ -40,5 +40,5 @@ app.use('/*', serveStatic({ root: './dist' }));
 app.get('*', serveStatic({ path: './dist/index.html' }));
 
 serve({ fetch: app.fetch, port: PORT, hostname: '127.0.0.1' }, (info) => {
-  console.log(`family-dashboard listening on http://localhost:${info.port}`);
+  console.log(`plow-airbnb-dashboard listening on http://localhost:${info.port}`);
 });

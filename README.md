@@ -1,4 +1,4 @@
-# family-dashboard
+# plow-airbnb-dashboard
 
 ## Purpose
 
@@ -28,10 +28,10 @@ just test
 
 ## Kiosk deploy (Raspberry Pi)
 
-Assumes Node ≥ 20.6 installed at `/usr/bin/node` and the repo cloned to `/home/odio/services/family-dashboard`.
+Assumes Node ≥ 20.6 installed at `/usr/bin/node` and the repo cloned to `/home/odio/services/plow-airbnb-dashboard`.
 
 ```sh
-cd /home/odio/services/family-dashboard
+cd /home/odio/services/plow-airbnb-dashboard
 git pull
 npm ci
 npm run build
@@ -40,31 +40,31 @@ cp .env.example .env
 # Fill in ICAL_URL.
 chmod 600 .env
 
-sudo cp family-dashboard.service /etc/systemd/system/
+sudo cp plow-airbnb-dashboard.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now family-dashboard.service
-sudo systemctl status family-dashboard.service   # should be "active (running)"
+sudo systemctl enable --now plow-airbnb-dashboard.service
+sudo systemctl status plow-airbnb-dashboard.service   # should be "active (running)"
 curl -s http://localhost:5174/healthz            # should print "ok"
 ```
 
 ### Pointing the kiosk at the dashboard
 
-The repo ships two Chromium-launcher units: `yodeck-kiosk.service` (points at Yodeck) and `family-kiosk.service` (points at `http://localhost:5174`). Only one runs at a time — both want the display. Install both and swap between them as needed:
+The repo ships two Chromium-launcher units: `yodeck-kiosk.service` (points at Yodeck) and `plow-airbnb-kiosk.service` (points at `http://localhost:5174`). Only one runs at a time — both want the display. Install both and swap between them as needed:
 
 ```sh
-sudo cp yodeck-kiosk.service family-kiosk.service /etc/systemd/system/
+sudo cp yodeck-kiosk.service plow-airbnb-kiosk.service /etc/systemd/system/
 sudo systemctl daemon-reload
 
-# Activate the family dashboard (and disable Yodeck):
+# Activate the Plow Airbnb dashboard (and disable Yodeck):
 sudo systemctl disable --now yodeck-kiosk.service
-sudo systemctl enable --now family-kiosk.service
+sudo systemctl enable --now plow-airbnb-kiosk.service
 
 # Or flip back to Yodeck:
-sudo systemctl disable --now family-kiosk.service
+sudo systemctl disable --now plow-airbnb-kiosk.service
 sudo systemctl enable --now yodeck-kiosk.service
 ```
 
-`family-kiosk.service` orders itself `After=family-dashboard.service` so the proxy is up by the time Chromium opens the URL.
+`plow-airbnb-kiosk.service` orders itself `After=plow-airbnb-dashboard.service` so the proxy is up by the time Chromium opens the URL.
 
 ## Configuration
 
@@ -90,8 +90,8 @@ To enable:
 1. **Deploy the Vercel project.** From the repo root: `vercel link` then `vercel deploy --prod`. `vercel.json` already disables the Vite build — only the `api/` functions ship.
 2. **Generate a token:** `openssl rand -hex 32`. Set it on Vercel as `DASHBOARD_TOKEN`.
 3. **Add a Vercel KV (Upstash) integration** to the project — `KV_REST_API_URL` and `KV_REST_API_TOKEN` are populated automatically.
-4. **On the Pi**, set `MESSAGE_API_URL=https://<project>.vercel.app/api/message` and `DASHBOARD_TOKEN=<same-token>` in `.env`, then restart `family-dashboard.service`.
+4. **On the Pi**, set `MESSAGE_API_URL=https://<project>.vercel.app/api/message` and `DASHBOARD_TOKEN=<same-token>` in `.env`, then restart `plow-airbnb-dashboard.service`.
 
 If either env var is missing, the message route is not registered and the dashboard renders the calendar only — the feature is opt-in.
 
-Plow posts messages via the `family-dashboard-poster` team-skill (separate PR in `~/Hacking/Plow`).
+Plow posts messages via the `plow-airbnb-dashboard-poster` team-skill (separate PR in `~/Hacking/Plow`).

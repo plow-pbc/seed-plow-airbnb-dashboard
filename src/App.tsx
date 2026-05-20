@@ -72,7 +72,7 @@ export function App() {
     <main className="app">
       {showMessage && message && <Message message={message} />}
       <header className="header">
-        <h1>Family Calendar</h1>
+        <h1>Plow Airbnb Calendar</h1>
         {fetchedAt && <span className="as-of">as of {timeFmt.format(fetchedAt)}</span>}
       </header>
       {state.kind === 'error' && (
