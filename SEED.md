@@ -44,12 +44,12 @@ Collect, per [[#^act-collect]]:
 | Parameter | Tier | Notes |
 |---|---|---|
 | Install mode | `tier-2` | `local` or `remote`. |
-| `.ics` URL | `tier-3` | The private calendar URL. Secret. |
+| `.ics` URL | `tier-3` | The private calendar URL. Secret — held by the agent, not stored in `install.env`. |
 | Pi IP address | `tier-3` | remote mode only. IPv4 of the Pi. |
 | Pi username | `tier-3` | remote mode only. The Pi login user. |
 | Target user | `tier-1` | local mode: the output of `id -un` (report it). remote mode: equals the Pi username. |
 
-Write the collected values into a config file. Fill the four marked values; leave `PI_*` blank for a local install:
+Write the collected values into a config file — but **not** the `.ics` URL: it is a secret and `install.env` is not access-restricted, so the agent keeps the URL it collected in this step in context and writes it only into the mode-`600` [[#^obj-env]] in Step 4. Fill the four values below; leave `PI_*` blank for a local install:
 
 ```sh
 mkdir -p ~/.config/seed-airbnb
@@ -201,11 +201,11 @@ npm run build
 EOF
 ```
 
-Create `.env` from `.env.example`, lock it to mode `600`, and fill in `ICAL_URL`. Set the `ICAL_URL` variable to the `.ics` URL from Step 1 first. This block uses an **unquoted** heredoc so `$ICAL_URL` expands locally and the secret travels via stdin, never `argv` (`\$DASH_DIR` is escaped so it expands on the target):
+Create `.env` from `.env.example`, lock it to mode `600`, and fill in `ICAL_URL`. The `.ics` URL was already collected in Step 1 — do **not** prompt for it again; set the `ICAL_URL` variable below to that value. This block uses an **unquoted** heredoc so `$ICAL_URL` expands locally and the secret travels via stdin, never `argv` (`\$DASH_DIR` is escaped so it expands on the target):
 
 ```sh
 source ~/.config/seed-airbnb/install.env
-ICAL_URL='PASTE_ICS_URL_HERE'
+ICAL_URL='<.ics URL collected in Step 1>'
 seed_sh <<EOF
 set -eu
 cd "\$DASH_DIR"
@@ -375,10 +375,10 @@ The verbs performed during the install. Each maps to a checklist the agent track
 The agent gathers the install mode and credentials, then writes `~/.config/seed-airbnb/install.env`.
 
 1. Ask the user for the install mode — `local` or `remote` (`tier-2`).
-2. Ask for the private `.ics` calendar URL (`tier-3`).
+2. Ask for the private `.ics` calendar URL (`tier-3`) — collected up front, here, so the user is not stopped for it partway through the install; the agent holds it in context for [[#^act-deploy-dashboard]].
 3. In remote mode, ask for the Pi's IP address and login username (`tier-3`).
 4. Resolve the target user: in local mode run `id -un` and report it (`tier-1`); in remote mode it is the Pi username.
-5. Write [[#^dep-collect]]'s `install.env` with those values and confirm it.
+5. Write [[#^dep-collect]]'s `install.env` with those values and confirm it — the `.ics` URL is deliberately **not** written there (it is a secret; see [[#^dep-collect]]).
 
 ### Remote access is established ^act-link
 
@@ -404,7 +404,7 @@ The agent installs and starts [[#^obj-dashboard-service]].
 
 1. Clone or update [[#^obj-dash-dir]] on the target.
 2. Run `npm ci` and `npm run build`.
-3. Create [[#^obj-env]] from `.env.example`, `chmod 600` it, and set `ICAL_URL`.
+3. Create [[#^obj-env]] from `.env.example`, `chmod 600` it, and set `ICAL_URL` to the URL already collected in [[#^act-collect]] — no new prompt.
 4. Replace `odio` with the target user throughout `plow-airbnb-dashboard.service`.
 5. Copy the unit to `/etc/systemd/system/`, `daemon-reload`, `enable --now`.
 6. Confirm `systemctl is-active` is `active` and `/healthz` returns `ok`. Per [[#^dep-dashboard]].
