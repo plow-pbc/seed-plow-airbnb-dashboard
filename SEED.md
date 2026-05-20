@@ -35,7 +35,7 @@ All shell blocks below are `tier-2`: each MUST be displayed in full and confirme
 
 On the **target Pi**: `git`, Node.js ≥ 20.6 with `npm`, `chromium` (at `/usr/bin/chromium`), `systemd`, `curl`, and — **required** — `sudo` usable **without a password** by the target user (the default on Raspberry Pi OS). Step 3 hard-gates on passwordless `sudo` and installs any missing packages.
 
-On the **local machine** (remote mode only): an SSH client (`ssh`, `ssh-keygen`, `ssh-copy-id`) and `sshpass`. Install `sshpass` with the platform package manager if missing (e.g. `brew install sshpass`, `sudo apt-get install -y sshpass`).
+On the **local machine** (remote mode only): a standard OpenSSH client — `ssh`, `ssh-keygen`, and `ssh-copy-id` — all included with OpenSSH on macOS and Linux. No other tooling is needed.
 
 ### Step 1 — Collect install parameters ^dep-collect
 
@@ -79,43 +79,51 @@ Confirm the file holds the right values before continuing:
 grep -E '^(INSTALL_MODE|TARGET_USER|PI_USER|PI_IP)=' ~/.config/seed-airbnb/install.env
 ```
 
-### Step 2 — Establish remote access ^dep-link
+### Step 2 — Set up passwordless SSH ^dep-link
 
-**remote mode only — skip this step entirely for a local install.** See [[#^act-link]]. The goal is key-based SSH so later steps run non-interactively, without the Pi password ever entering the agent's context.
+**remote mode only — skip this step entirely for a local install.** See [[#^act-link]].
 
-If key auth already works, skip to Step 3:
+A remote install runs every later step over SSH non-interactively, so the Pi must accept this machine's SSH **key** — no password prompts. The standard tool is `ssh-copy-id`: it asks for the Pi password **once**, installs your public key, and from then on SSH logs in with no password. You run that one command yourself, so the password goes straight into `ssh-copy-id` and never passes through the agent.
 
-```sh
-source ~/.config/seed-airbnb/install.env
-ssh -o BatchMode=yes -o ConnectTimeout=5 "$PI_USER@$PI_IP" true && echo "key auth already works — skip Step 2"
-```
-
-Otherwise, ensure a local SSH keypair exists:
-
-```sh
-ls ~/.ssh/id_ed25519.pub >/dev/null 2>&1 || ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
-```
-
-Next, **the user** (not the agent) writes the Pi password into a temp file, so the password never enters the agent's context. Ask the user to run this themselves — in Claude Code, by typing it after a `!` prompt prefix:
-
-```sh
-umask 077 && printf 'Pi password: ' && read -rs P && printf '%s' "$P" > /tmp/seed-pi-pw && unset P && echo && echo 'saved /tmp/seed-pi-pw'
-```
-
-Copy this machine's public key to the Pi — `sshpass` reads the password from the file, never from `argv`:
+**Step 2.1 — Is it already set up?** The agent runs this. If it prints `already passwordless`, skip straight to Step 3:
 
 ```sh
 source ~/.config/seed-airbnb/install.env
-sshpass -f /tmp/seed-pi-pw ssh-copy-id -o StrictHostKeyChecking=accept-new "$PI_USER@$PI_IP"
+ssh -o BatchMode=yes -o ConnectTimeout=5 "$PI_USER@$PI_IP" true \
+  && echo "already passwordless — skip to Step 3" \
+  || echo "not set up yet — continue with Steps 2.2-2.4"
 ```
 
-Delete the password file, then confirm key auth works:
+**Step 2.2 — Make sure this machine has an SSH key.** The agent runs this; it creates an `ed25519` keypair only if you do not already have one:
+
+```sh
+ls ~/.ssh/id_ed25519.pub >/dev/null 2>&1 \
+  && echo "SSH key already present" \
+  || ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
+```
+
+**Step 2.3 — Copy your key to the Pi (you run this one).** `ssh-copy-id` must prompt *you* for the Pi password, so run it yourself in an interactive terminal — in Claude Code, type it after a `!` prefix. Substitute the Pi username and IP from Step 1:
+
+```sh
+ssh-copy-id <PI_USER>@<PI_IP>
+```
+
+On the first connection it asks `Are you sure you want to continue connecting?` — type `yes`. Then at `<PI_USER>@<PI_IP>'s password:` type the Pi password. Success prints `Number of key(s) added: 1`.
+
+If `ssh-copy-id` is not installed, the same thing by hand (run it yourself, enter the password when prompted):
+
+```sh
+cat ~/.ssh/id_ed25519.pub | ssh <PI_USER>@<PI_IP> 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
+```
+
+**Step 2.4 — Confirm passwordless login works.** The agent runs this; it MUST print `passwordless SSH OK` with no password prompt:
 
 ```sh
 source ~/.config/seed-airbnb/install.env
-shred -u /tmp/seed-pi-pw 2>/dev/null || rm -f /tmp/seed-pi-pw
-ssh -o BatchMode=yes "$PI_USER@$PI_IP" true && echo "key auth OK"
+ssh -o BatchMode=yes "$PI_USER@$PI_IP" true && echo "passwordless SSH OK"
 ```
+
+If this still asks for a password or fails, repeat Step 2.3.
 
 ### Step 3 — Ensure target software ^dep-software
 
@@ -374,14 +382,13 @@ The agent gathers the install mode and credentials, then writes `~/.config/seed-
 
 ### Remote access is established ^act-link
 
-In remote mode, the agent sets up key-based SSH so later steps run non-interactively, without the password entering its context.
+In remote mode, the agent walks the user through setting up passwordless, key-based SSH so every later step runs over SSH non-interactively.
 
 1. Skip this Action entirely in local mode.
-2. If `ssh -o BatchMode=yes` already succeeds against the Pi, skip ahead to [[#^act-software]].
-3. Ensure a local SSH keypair exists.
-4. Have the **user** write the Pi password into `/tmp/seed-pi-pw` themselves (`tier-3`); the agent MUST NOT read or echo it.
-5. Run `ssh-copy-id` via `sshpass -f` to install the public key on the Pi.
-6. Delete the password file and confirm key auth works. Per [[#^dep-link]].
+2. Check whether passwordless SSH already works; if so, skip ahead to [[#^act-software]].
+3. Ensure this machine has an SSH keypair (create an `ed25519` key if none exists).
+4. Direct the **user** to run `ssh-copy-id <PI_USER>@<PI_IP>` themselves in an interactive terminal and enter the Pi password once (`tier-3`); the password goes to `ssh-copy-id`, never to the agent.
+5. Confirm passwordless SSH works (`ssh -o BatchMode=yes`). Per [[#^dep-link]].
 
 ### Target software is ensured ^act-software
 
