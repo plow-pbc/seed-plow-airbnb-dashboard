@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Tiny React app that shows the next 12 events from a shared Google Calendar, served by a Node proxy on the kiosk box. On a Raspberry Pi it runs as a systemd service behind a companion Chromium kiosk unit that displays it full-screen.
+Tiny React app served by a Node proxy on the kiosk box. With a shared Google Calendar it shows the next 12 events; with a Hostex OpenAPI token it shows a two-month availability calendar for every listing the token covers. On a Raspberry Pi it runs as a systemd service behind a companion Chromium kiosk unit that displays it full-screen.
 
 ## Install
 
@@ -12,7 +12,7 @@ This repo is a [SEED](https://github.com/plow-pbc/seed) — `SEED.md` describes 
 
 ```sh
 cp .env.example .env
-# Fill in ICAL_URL with the calendar's private ICS URL.
+# Fill in ICAL_URL (private ICS URL) or HOSTEX_ACCESS_TOKEN — exactly one.
 
 npm install
 just dev    # starts Vite (5173) + API server (5174), Vite proxies /api → 5174
@@ -37,7 +37,7 @@ npm ci
 npm run build
 
 cp .env.example .env
-# Fill in ICAL_URL.
+# Fill in ICAL_URL or HOSTEX_ACCESS_TOKEN — exactly one.
 chmod 600 .env
 
 sudo cp plow-airbnb-dashboard.service /etc/systemd/system/
@@ -63,16 +63,24 @@ sudo systemctl enable --now plow-airbnb-kiosk.service
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
-| `ICAL_URL` | yes | — | Full private ICS URL. Secret. |
+| `ICAL_URL` | one of¹ | — | Full private ICS URL — drives the event-list view. Secret. |
+| `HOSTEX_ACCESS_TOKEN` | one of¹ | — | Hostex OpenAPI token — drives the availability-calendar view. Wins if both are set. Secret. |
 | `PORT` | no | `5174` | Server listen port. |
-| `NEXT_N` | no | `12` | Max events displayed. **Baked at build time** — rebuild to change. |
+| `NEXT_N` | no | `12` | Max events displayed (ICS view only). **Baked at build time** — rebuild to change. |
 | `REFRESH_MS` | no | `300000` | Page reload interval (5 min). **Baked at build time**. |
 | `MESSAGE_API_URL` | no | — | Vercel function URL for the message store. Enables `/api/message`. |
 | `DASHBOARD_TOKEN` | no | — | Shared bearer token for the message API. Secret. |
 
+¹ Exactly one of `ICAL_URL` / `HOSTEX_ACCESS_TOKEN` must be set.
+
 ## Architecture
 
-One Node process serves the Vite-built React SPA AND proxies the secret ICS URL at `/api/ical` with a 60-second in-memory cache and stale-on-failure fallback. The React app fetches that same-origin endpoint, parses with `ical.js` (recurrence-aware, drops `STATUS:CANCELLED`), and renders a list of the next `NEXT_N` events. The page calls `location.reload()` every `REFRESH_MS` (5 min default) — that, not in-app polling, is the freshness + state-recovery mechanism. Server binds loopback only; a Host-header allowlist on `/api/*` defends against DNS rebinding.
+One Node process serves the Vite-built React SPA AND proxies the calendar source at `/api/calendar` with a 60-second in-memory cache and stale-on-failure fallback. The proxy keeps the secret credential server-side and returns a JSON envelope tagged with its `source`, so the same build picks its view at runtime:
+
+- **ICS mode** (`ICAL_URL`) — the envelope carries the raw ICS; the React app parses it with `ical.js` (recurrence-aware, drops `STATUS:CANCELLED`) and renders a list of the next `NEXT_N` events.
+- **Hostex mode** (`HOSTEX_ACCESS_TOKEN`) — the proxy calls the Hostex OpenAPI (`GET /v3/properties`, `GET /v3/reservations`, and `POST /v3/listings/calendar`) and the app renders a scrollable reservation timeline: one row per home, with reservation bars labelled by guest, channel, and nights, and owner-blocked dates (inventory 0, no reservation) hatched.
+
+The page calls `location.reload()` every `REFRESH_MS` (5 min default) — that, not in-app polling, is the freshness + state-recovery mechanism. Server binds loopback only; a Host-header allowlist on `/api/*` defends against DNS rebinding.
 
 ## Messages (optional)
 

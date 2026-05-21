@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { parseICS } from './ical';
-import type { Event } from './types';
+import type { Event, HostexHome } from './types';
 import { EventRow } from './components/EventRow';
+import { HostexTimeline } from './components/HostexTimeline';
 import { Message } from './components/Message';
 import { isFresh, type Message as MessageType } from './message';
+import { loadRotation, saveRotation, nextRotation } from './rotation';
 
 const NEXT_N = Number(__NEXT_N__);
 const REFRESH_MS = Number(__REFRESH_MS__);
@@ -13,25 +15,43 @@ const timeFmt = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
 });
 
+// The /api/calendar envelope — the server tags it with the source it was
+// configured for, so the same build renders either view at runtime.
+type CalendarResponse = { source: 'ical'; ics: string } | { source: 'hostex'; homes: HostexHome[] };
+
 type State =
   | { kind: 'loading' }
-  | { kind: 'ready'; events: Event[]; fetchedAt: Date }
+  | { kind: 'ical'; events: Event[]; fetchedAt: Date }
+  | { kind: 'hostex'; homes: HostexHome[]; fetchedAt: Date }
   | { kind: 'error' };
 
 export function App() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [message, setMessage] = useState<MessageType | null>(null);
+  const [rotation, setRotation] = useState(loadRotation);
+
+  // Apply and persist the kiosk rotation. index.html re-applies it before
+  // first paint so the periodic reload doesn't flash the default orientation.
+  useEffect(() => {
+    document.documentElement.dataset.rotation = String(rotation);
+    saveRotation(rotation);
+  }, [rotation]);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        const res = await fetch('/api/ical');
+        const res = await fetch('/api/calendar');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const text = await res.text();
-        const events = parseICS(text, new Date(), NEXT_N);
-        if (!cancelled) setState({ kind: 'ready', events, fetchedAt: new Date() });
+        const body = (await res.json()) as CalendarResponse;
+        if (cancelled) return;
+        if (body.source === 'hostex') {
+          setState({ kind: 'hostex', homes: body.homes, fetchedAt: new Date() });
+        } else {
+          const events = parseICS(body.ics, new Date(), NEXT_N);
+          setState({ kind: 'ical', events, fetchedAt: new Date() });
+        }
       } catch {
         if (!cancelled) setState({ kind: 'error' });
       }
@@ -65,7 +85,7 @@ export function App() {
     return () => clearTimeout(timer);
   }, [message]);
 
-  const fetchedAt = state.kind === 'ready' ? state.fetchedAt : null;
+  const fetchedAt = state.kind === 'ical' || state.kind === 'hostex' ? state.fetchedAt : null;
   const showMessage = isFresh(message, new Date());
 
   return (
@@ -73,12 +93,23 @@ export function App() {
       {showMessage && message && <Message message={message} />}
       <header className="header">
         <h1>Plow Airbnb Calendar</h1>
-        {fetchedAt && <span className="as-of">as of {timeFmt.format(fetchedAt)}</span>}
+        <div className="header-right">
+          {fetchedAt && <span className="as-of">as of {timeFmt.format(fetchedAt)}</span>}
+          <button
+            type="button"
+            className="rotate-btn"
+            onClick={() => setRotation(nextRotation)}
+            aria-label="Rotate display"
+            title="Rotate display"
+          >
+            ⟳ {rotation}°
+          </button>
+        </div>
       </header>
       {state.kind === 'error' && (
         <p className="error-state">Can't reach calendar — retrying soon.</p>
       )}
-      {state.kind === 'ready' &&
+      {state.kind === 'ical' &&
         (state.events.length === 0 ? (
           <p className="empty-state">No upcoming events.</p>
         ) : (
@@ -88,6 +119,7 @@ export function App() {
             ))}
           </ul>
         ))}
+      {state.kind === 'hostex' && <HostexTimeline homes={state.homes} />}
     </main>
   );
 }

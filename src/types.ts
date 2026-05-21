@@ -6,3 +6,20 @@ export type Event = {
   isAllDay: boolean;
   location: string | null;
 };
+
+// Hostex reservation-timeline source.
+export type Reservation = {
+  guest: string;
+  channel: string; // 'airbnb' | 'vrbo' | 'booking_site' | ...
+  check_in: string; // YYYY-MM-DD
+  check_out: string; // YYYY-MM-DD
+  nights: number;
+};
+
+export type HostexHome = {
+  id: number;
+  name: string;
+  cover: string | null; // thumbnail URL, or null
+  reservations: Reservation[];
+  blocked: string[]; // YYYY-MM-DD dates the home is unavailable but unreserved
+};

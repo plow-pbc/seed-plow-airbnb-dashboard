@@ -3,9 +3,9 @@ import { createApp } from './app.js';
 
 const routeCases = [
   {
-    label: '/api/ical',
-    fetcherKey: 'fetchUpstream',
-    contentType: 'text/calendar',
+    label: '/api/calendar',
+    fetcherKey: 'fetchCalendar',
+    contentType: 'application/json',
   },
   {
     label: '/api/message',
@@ -17,7 +17,7 @@ const routeCases = [
 function appWith(fetcherKey, fetcher, opts = {}) {
   // Both routes always wired so the host-guard, healthz, and lifecycle cases
   // exercise the route under test regardless of which one is parameterized.
-  const fetchers = { fetchUpstream: vi.fn(), fetchMessage: vi.fn() };
+  const fetchers = { fetchCalendar: vi.fn(), fetchMessage: vi.fn() };
   return createApp({ ...fetchers, [fetcherKey]: fetcher, ...opts });
 }
 
@@ -154,10 +154,10 @@ describe('createApp', () => {
 
   // Route-specific miss-behavior (the two routes diverge on what to do when
   // upstream fails AND the cache is empty).
-  it('/api/ical returns 502 when upstream fails with no cache', async () => {
+  it('/api/calendar returns 502 when upstream fails with no cache', async () => {
     const fetcher = vi.fn().mockRejectedValue(new Error('network down'));
-    const app = appWith('fetchUpstream', fetcher);
-    const res = await app.fetch(new Request('http://localhost/api/ical'));
+    const app = appWith('fetchCalendar', fetcher);
+    const res = await app.fetch(new Request('http://localhost/api/calendar'));
     expect(res.status).toBe(502);
   });
 
@@ -170,7 +170,7 @@ describe('createApp', () => {
   });
 
   it('/api/message is not registered when fetchMessage is omitted', async () => {
-    const app = createApp({ fetchUpstream: vi.fn() });
+    const app = createApp({ fetchCalendar: vi.fn() });
     const res = await app.fetch(new Request('http://localhost/api/message'));
     expect(res.status).toBe(404);
   });

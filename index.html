@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Plow Airbnb Calendar</title>
+    <script>
+      // Re-apply the saved kiosk rotation before first paint so the periodic
+      // reload never flashes the default orientation. Mirrors src/rotation.ts.
+      try {
+        var r = localStorage.getItem('dashboard-rotation');
+        if (r) document.documentElement.dataset.rotation = r;
+      } catch (e) {
+        /* storage disabled — fall back to the CSS default */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

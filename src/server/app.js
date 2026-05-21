@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 
-export function createApp({ fetchUpstream, fetchMessage, ttlMs = 60_000, now = Date.now }) {
+export function createApp({ fetchCalendar, fetchMessage, ttlMs = 60_000, now = Date.now }) {
   const app = new Hono();
 
   app.get('/healthz', (c) => c.text('ok'));
@@ -20,11 +20,14 @@ export function createApp({ fetchUpstream, fetchMessage, ttlMs = 60_000, now = D
     await next();
   });
 
+  // Returns a discriminated JSON envelope — { source: 'ical', ics } or
+  // { source: 'hostex', listings } — so the client picks its view at runtime
+  // without the build needing to know which source this Pi was configured for.
   registerCachedRoute(app, {
-    path: '/api/ical',
-    fetcher: fetchUpstream,
-    contentType: 'text/calendar; charset=utf-8',
-    onMissAndError: (c) => c.text('Upstream unreachable', 502),
+    path: '/api/calendar',
+    fetcher: fetchCalendar,
+    contentType: 'application/json; charset=utf-8',
+    onMissAndError: (c) => c.json({ error: 'Upstream unreachable' }, 502),
     ttlMs,
     now,
   });
@@ -72,7 +75,10 @@ function registerCachedRoute(
       const body = await fetcher(qs);
       cacheByQs.set(qs, { body, fetchedAt: t });
       return c.body(body, 200, { 'content-type': contentType });
-    } catch {
+    } catch (err) {
+      // Surface upstream failures — otherwise a bad token or unreachable API
+      // is invisible behind the generic client-side error message.
+      console.error(`${path}: upstream fetch failed — ${err.message}`);
       if (cached) return c.body(cached.body, 200, { 'content-type': contentType });
       return onMissAndError(c);
     }
