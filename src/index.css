@@ -4,7 +4,7 @@
   --muted: #666;
   --accent: #1a73e8;
   --row-border: #e5e5e5;
-  --base-size: 28px;
+  --base-size: 21px;
 }
 
 * {
@@ -89,7 +89,7 @@ html[data-rotation='270'] body {
 
 .header h1 {
   margin: 0;
-  font-size: 1.6em;
+  font-size: 1.0em;
   font-weight: 700;
 }
 
