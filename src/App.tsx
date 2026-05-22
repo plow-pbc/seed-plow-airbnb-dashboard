@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { parseICS } from './ical';
-import type { Event, HostexHome } from './types';
-import { EventRow } from './components/EventRow';
-import { HostexTimeline } from './components/HostexTimeline';
+import type { HostexHome } from './types';
 import { Message } from './components/Message';
+import { Dashboard } from './components/Dashboard';
+import { SettingsPanel } from './components/SettingsPanel';
+import { buildViews, type CalendarSource } from './views/registry';
 import { isFresh, type Message as MessageType } from './message';
 import { loadRotation, saveRotation, nextRotation } from './rotation';
+import { loadConfig, saveConfig } from './config';
 
 const NEXT_N = Number(__NEXT_N__);
 const REFRESH_MS = Number(__REFRESH_MS__);
@@ -15,20 +17,26 @@ const timeFmt = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
 });
 
-// The /api/calendar envelope — the server tags it with the source it was
-// configured for, so the same build renders either view at runtime.
-type CalendarResponse = { source: 'ical'; ics: string } | { source: 'hostex'; homes: HostexHome[] };
+// The /api/calendar envelope — one entry per configured source (ICAL_URL
+// and/or HOSTEX_ACCESS_TOKEN), each tagged with its `source`. `error` marks a
+// source that failed to load this cycle.
+type RawSource =
+  | { source: 'ical'; ics: string }
+  | { source: 'hostex'; homes: HostexHome[] }
+  | { source: 'ical' | 'hostex'; error: true };
+type CalendarResponse = { sources: RawSource[] };
 
 type State =
   | { kind: 'loading' }
-  | { kind: 'ical'; events: Event[]; fetchedAt: Date }
-  | { kind: 'hostex'; homes: HostexHome[]; fetchedAt: Date }
+  | { kind: 'loaded'; sources: CalendarSource[]; fetchedAt: Date }
   | { kind: 'error' };
 
 export function App() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [message, setMessage] = useState<MessageType | null>(null);
   const [rotation, setRotation] = useState(loadRotation);
+  const [config, setConfig] = useState(loadConfig);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Apply and persist the kiosk rotation. index.html re-applies it before
   // first paint so the periodic reload doesn't flash the default orientation.
@@ -36,6 +44,11 @@ export function App() {
     document.documentElement.dataset.rotation = String(rotation);
     saveRotation(rotation);
   }, [rotation]);
+
+  // Persist layout config — every screen keeps its own in localStorage.
+  useEffect(() => {
+    saveConfig(config);
+  }, [config]);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,12 +59,13 @@ export function App() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = (await res.json()) as CalendarResponse;
         if (cancelled) return;
-        if (body.source === 'hostex') {
-          setState({ kind: 'hostex', homes: body.homes, fetchedAt: new Date() });
-        } else {
-          const events = parseICS(body.ics, new Date(), NEXT_N);
-          setState({ kind: 'ical', events, fetchedAt: new Date() });
-        }
+        const now = new Date();
+        const sources: CalendarSource[] = body.sources.map((s) => {
+          if ('error' in s) return { source: s.source, error: true };
+          if (s.source === 'ical') return { source: 'ical', events: parseICS(s.ics, now, NEXT_N) };
+          return { source: 'hostex', homes: s.homes };
+        });
+        setState({ kind: 'loaded', sources, fetchedAt: now });
       } catch {
         if (!cancelled) setState({ kind: 'error' });
       }
@@ -85,19 +99,36 @@ export function App() {
     return () => clearTimeout(timer);
   }, [message]);
 
-  const fetchedAt = state.kind === 'ical' || state.kind === 'hostex' ? state.fetchedAt : null;
+  const fetchedAt = state.kind === 'loaded' ? state.fetchedAt : null;
   const showMessage = isFresh(message, new Date());
+
+  // The loaded calendar sources drive the view registry; empty while loading
+  // or on total failure, when only the data-free clock is available.
+  const sources = useMemo<CalendarSource[]>(
+    () => (state.kind === 'loaded' ? state.sources : []),
+    [state],
+  );
+  const views = useMemo(() => buildViews(sources), [sources]);
 
   return (
     <main className="app">
       {showMessage && message && <Message message={message} />}
       <header className="header">
-        <h1>Plow Airbnb Calendar</h1>
+        <h1>Plow Airbnb Dashboard</h1>
         <div className="header-right">
           {fetchedAt && <span className="as-of">as of {timeFmt.format(fetchedAt)}</span>}
           <button
             type="button"
-            className="rotate-btn"
+            className="icon-btn"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Settings"
+            title="Settings"
+          >
+            ⚙
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
             onClick={() => setRotation(nextRotation)}
             aria-label="Rotate display"
             title="Rotate display"
@@ -107,19 +138,17 @@ export function App() {
         </div>
       </header>
       {state.kind === 'error' && (
-        <p className="error-state">Can't reach calendar — retrying soon.</p>
+        <p className="error-banner">Can't reach calendar — retrying soon.</p>
       )}
-      {state.kind === 'ical' &&
-        (state.events.length === 0 ? (
-          <p className="empty-state">No upcoming events.</p>
-        ) : (
-          <ul className="event-list">
-            {state.events.map((event) => (
-              <EventRow key={event.uid} event={event} />
-            ))}
-          </ul>
-        ))}
-      {state.kind === 'hostex' && <HostexTimeline homes={state.homes} />}
+      <Dashboard views={views} config={config} />
+      {settingsOpen && (
+        <SettingsPanel
+          views={views}
+          config={config}
+          onChange={setConfig}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </main>
   );
 }

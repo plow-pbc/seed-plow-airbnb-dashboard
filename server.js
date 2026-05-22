@@ -3,30 +3,59 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { createApp } from './src/server/app.js';
 import { fetchHostexCalendar } from './src/server/hostex.js';
 
-// Calendar source: exactly one of HOSTEX_ACCESS_TOKEN or ICAL_URL. When both
-// are set the Hostex token wins. Either way fetchCalendar resolves to a JSON
-// envelope tagged with `source` so the client knows which view to render.
+// Calendar sources: ICAL_URL and/or HOSTEX_ACCESS_TOKEN. Both may be set —
+// each configured source becomes its own dashboard panel. /api/calendar
+// resolves to { sources: [...] }, one entry per source, each tagged with its
+// `source` so the client knows which view to render.
 const ICAL_URL = process.env.ICAL_URL;
 const HOSTEX_ACCESS_TOKEN = process.env.HOSTEX_ACCESS_TOKEN;
 
-let fetchCalendar;
+const sources = [];
+if (ICAL_URL) {
+  sources.push({
+    kind: 'ical',
+    fetch: async () => {
+      const res = await fetch(ICAL_URL, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) throw new Error(`ICS upstream returned HTTP ${res.status}`);
+      return { source: 'ical', ics: await res.text() };
+    },
+  });
+}
 if (HOSTEX_ACCESS_TOKEN) {
-  console.log('Calendar source: Hostex API');
-  fetchCalendar = async () => {
-    const data = await fetchHostexCalendar(HOSTEX_ACCESS_TOKEN, new Date());
-    return JSON.stringify({ source: 'hostex', ...data });
-  };
-} else if (ICAL_URL) {
-  console.log('Calendar source: ICS URL');
-  fetchCalendar = async () => {
-    const res = await fetch(ICAL_URL, { signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) throw new Error(`Upstream returned HTTP ${res.status}`);
-    return JSON.stringify({ source: 'ical', ics: await res.text() });
-  };
-} else {
-  console.error('FATAL: set HOSTEX_ACCESS_TOKEN or ICAL_URL in .env');
+  sources.push({
+    kind: 'hostex',
+    fetch: async () => {
+      const data = await fetchHostexCalendar(HOSTEX_ACCESS_TOKEN, new Date());
+      return { source: 'hostex', ...data };
+    },
+  });
+}
+if (sources.length === 0) {
+  console.error('FATAL: set ICAL_URL and/or HOSTEX_ACCESS_TOKEN in .env');
   process.exit(1);
 }
+console.log(`Calendar sources: ${sources.map((s) => s.kind).join(', ')}`);
+
+// Fetch every source independently — one failing source must not blank out a
+// working one; its entry is tagged `error` and the client shows a retry
+// notice in that panel. Throw only when they all fail, so the cached route
+// can still fall back to the last good payload.
+const fetchCalendar = async () => {
+  const results = await Promise.all(
+    sources.map(async (s) => {
+      try {
+        return await s.fetch();
+      } catch (err) {
+        console.error(`Calendar source "${s.kind}" failed — ${err.message}`);
+        return { source: s.kind, error: true };
+      }
+    }),
+  );
+  if (results.every((r) => r.error)) {
+    throw new Error('all calendar sources unreachable');
+  }
+  return JSON.stringify({ sources: results });
+};
 
 const MESSAGE_API_URL = process.env.MESSAGE_API_URL;
 const DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN;

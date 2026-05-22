@@ -71,6 +71,11 @@ html[data-rotation='270'] body {
   transform: translate(0, 100vh) rotate(-90deg);
 }
 
+/* The flex layout needs an unbroken height chain from <body> down. */
+#root {
+  height: 100%;
+}
+
 .app {
   height: 100%;
   padding: 2rem 3rem;
@@ -104,7 +109,8 @@ html[data-rotation='270'] body {
   gap: 1rem;
 }
 
-.rotate-btn {
+.icon-btn {
+  font: inherit;
   font-size: 0.55em;
   line-height: 1;
   padding: 0.4em 0.7em;
@@ -116,7 +122,7 @@ html[data-rotation='270'] body {
   cursor: pointer;
 }
 
-.rotate-btn:active {
+.icon-btn:active {
   background: #f0f0f0;
 }
 
@@ -160,16 +166,31 @@ html[data-rotation='270'] body {
   text-overflow: ellipsis;
 }
 
-.empty-state,
-.error-state {
+.empty-state {
   margin-top: 4rem;
   text-align: center;
   color: var(--muted);
   font-size: 1.2em;
 }
 
-.error-state {
+/* A source that failed to load — centred inside its own panel. */
+.view-error {
+  margin: auto;
+  padding: 1rem;
+  text-align: center;
   color: #b00020;
+  font-size: 1.05em;
+}
+
+.error-banner {
+  margin: 0 0 1rem;
+  padding: 0.55rem 1rem;
+  text-align: center;
+  background: #fdecea;
+  border: 1px solid #f1b0b7;
+  border-radius: 6px;
+  color: #b00020;
+  font-size: 0.7em;
 }
 
 .message-card {
@@ -413,4 +434,218 @@ html[data-rotation='270'] body {
 
 .tl-resv.past {
   background: #9aa0a6;
+}
+
+/* --- Dashboard grid, panels & tabs ----------------------------------- */
+
+.dashboard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dashboard-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* A border + padding only when a page tiles more than one view; a single
+ * panel leans on the app frame instead. */
+.panel.framed {
+  border: 1px solid var(--row-border);
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+}
+
+.panel-title {
+  flex: none;
+  margin-bottom: 0.5rem;
+  font-size: 0.6em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Lets the clock size itself to the panel via cq units. */
+  container-type: size;
+}
+
+.tabbar {
+  flex: none;
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.tab {
+  flex: 1;
+  font: inherit;
+  font-size: 0.6em;
+  padding: 0.6em 0.9em;
+  border: 1px solid var(--row-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* --- Clock view ------------------------------------------------------ */
+
+.clock-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.clock-time {
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  /* Scales with the panel: small when tiled, large when full-screen. */
+  font-size: clamp(2.2rem, 17cqmin, 13rem);
+}
+
+.clock-date {
+  color: var(--muted);
+  font-size: clamp(0.85rem, 4.5cqmin, 2.6rem);
+}
+
+/* --- Settings overlay ------------------------------------------------ */
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.settings-panel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.4rem 1.7rem;
+  min-width: 17rem;
+  max-width: 90%;
+  max-height: 90%;
+  overflow: auto;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  font-size: 0.78em;
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-head h2 {
+  margin: 0;
+  font-size: 1.3em;
+}
+
+.settings-section {
+  margin-top: 1.2rem;
+}
+
+.settings-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-hint {
+  margin: 0.55rem 0 0;
+  font-size: 0.82em;
+  color: var(--muted);
+}
+
+.chip {
+  font: inherit;
+  padding: 0.5em 1em;
+  border: 1px solid var(--row-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.chip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15em 0.3em;
+  border: 1px solid var(--row-border);
+  border-radius: 999px;
+}
+
+.stepper.disabled {
+  opacity: 0.4;
+}
+
+.stepper button {
+  font: inherit;
+  width: 1.9em;
+  height: 1.9em;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.stepper button:active {
+  background: #f0f0f0;
+}
+
+.stepper span {
+  min-width: 2.6em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
