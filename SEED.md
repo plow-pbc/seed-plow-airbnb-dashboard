@@ -32,7 +32,7 @@ All shell blocks below are `tier-2`: each MUST be displayed in full and confirme
 - **At least one** calendar credential — the dashboard's data sources — collected in [[#^act-collect]] and written to [[#^obj-env]]. Each source supplied becomes its own dashboard panel; supplying multiple shows them side-by-side. Treated as secrets. The available credentials are:
   - a private **`.ics` calendar URL** (an event-list panel),
   - a **Hostex OpenAPI access token** (a reservation-timeline panel), **and/or**
-  - a **Guesty Open API credential pair** — both `GUESTY_CLIENT_ID` and `GUESTY_CLIENT_SECRET` (a reservation-timeline panel; both vars are required for the panel to appear).
+  - a **Guesty Open API credential pair** — both `GUESTY_CLIENT_ID` and `GUESTY_CLIENT_SECRET` (a reservation-timeline panel; both vars are required for the panel to appear). **Experimental — gated:** Guesty is only offered when the environment variable `GUESTY_SUPPORT` is set in the agent's environment at SEED runtime. When it is unset, the agent MUST NOT mention or prompt for Guesty credentials anywhere in this SEED, MUST NOT count Guesty toward the "at least one source" requirement, and MUST leave the Guesty value variables empty in Step 4.
 
 ### Software
 
@@ -49,9 +49,9 @@ Collect, per [[#^act-collect]]:
 | Install mode | `tier-2` | `local` or `remote`. |
 | Calendar credentials — `.ics` URL | `tier-3` | Optional. Adds the event-list panel. Secret — held by the agent, not stored in `install.env`. |
 | Calendar credentials — Hostex access token | `tier-3` | Optional. Adds the Hostex reservations panel. Secret. |
-| Calendar credentials — Guesty `CLIENT_ID` | `tier-3` | Optional. Must be paired with the Guesty `CLIENT_SECRET` below to add the Guesty reservations panel. Secret. |
-| Calendar credentials — Guesty `CLIENT_SECRET` | `tier-3` | Optional. Must be paired with the Guesty `CLIENT_ID` above. Secret. |
-| (At least one source) | — | The four credentials above are individually optional, but **at least one source** is required: the `.ics` URL, the Hostex token, or **both** Guesty vars. Any combination is accepted. |
+| Calendar credentials — Guesty `CLIENT_ID` | `tier-3` | Optional. **Only offered when `GUESTY_SUPPORT` is set** in the agent's environment (experimental). Must be paired with the Guesty `CLIENT_SECRET` below to add the Guesty reservations panel. Secret. |
+| Calendar credentials — Guesty `CLIENT_SECRET` | `tier-3` | Optional. **Only offered when `GUESTY_SUPPORT` is set** (experimental). Must be paired with the Guesty `CLIENT_ID` above. Secret. |
+| (At least one source) | — | The credentials above are individually optional, but **at least one source** is required: the `.ics` URL, the Hostex token, or — when `GUESTY_SUPPORT` is set — **both** Guesty vars. Any combination is accepted. |
 | Pi IP address | `tier-3` | remote mode only. IPv4 of the Pi. |
 | Pi username | `tier-3` | remote mode only. The Pi login user. |
 | Target user | `tier-1` | local mode: the output of `id -un` (report it). remote mode: equals the Pi username. |
@@ -408,7 +408,7 @@ The verbs performed during the install. Each maps to a checklist the agent track
 The agent gathers the install mode and credentials, then writes `~/.config/seed-airbnb/install.env`.
 
 1. Ask the user for the install mode — `local` or `remote` (`tier-2`).
-2. Ask for the calendar credentials (`tier-3`), prompting **separately** for each secret to match the SEED's per-secret pattern — a private `.ics` calendar URL, a Hostex access token, and/or the Guesty `CLIENT_ID` + `CLIENT_SECRET` pair (both Guesty vars must be supplied together for the panel to enable). At least one source is required; any combination is accepted (each becomes its own dashboard panel). Collected up front, here, so the user is not stopped for them partway through the install; the agent holds them in context for [[#^act-deploy-dashboard]].
+2. Ask for the calendar credentials (`tier-3`), prompting **separately** for each secret to match the SEED's per-secret pattern — a private `.ics` calendar URL, a Hostex access token, **and — only when `GUESTY_SUPPORT` is set in the agent's environment at SEED runtime** — the Guesty `CLIENT_ID` + `CLIENT_SECRET` pair (both Guesty vars must be supplied together for the panel to enable). When `GUESTY_SUPPORT` is unset, do not mention or prompt for Guesty at all (the feature is experimental). At least one source is required; any combination is accepted (each becomes its own dashboard panel). Collected up front, here, so the user is not stopped for them partway through the install; the agent holds them in context for [[#^act-deploy-dashboard]].
 3. In remote mode, ask for the Pi's IP address and login username (`tier-3`).
 4. Resolve the target user: in local mode run `id -un` and report it (`tier-1`); in remote mode it is the Pi username.
 5. Write [[#^dep-collect]]'s `install.env` with those values and confirm it — the calendar credentials are deliberately **not** written there (they are secrets; see [[#^dep-collect]]).
