@@ -3,7 +3,7 @@
 // kiosk screen keeps its own layout — a portrait Pi and a wide monitor want
 // different settings. Mirrors rotation.ts in shape; both are pure + tested.
 
-export type Density = 'auto' | 1 | 2 | 3;
+export type Density = 'auto' | number;
 
 export type DashboardConfig = {
   // Views explicitly turned off in settings. Storing the *disabled* set (not
@@ -20,7 +20,6 @@ export type DashboardConfig = {
 };
 
 const STORAGE_KEY = 'dashboard-config';
-const DENSITIES: Density[] = ['auto', 1, 2, 3];
 export const MIN_ROTATE_SECONDS = 3;
 export const MAX_ROTATE_SECONDS = 120;
 
@@ -52,9 +51,12 @@ export function parseConfig(raw: string | null): DashboardConfig {
     ? o.disabledViewIds.filter((v): v is string => typeof v === 'string')
     : DEFAULT_CONFIG.disabledViewIds;
 
-  const density = DENSITIES.includes(o.density as Density)
-    ? (o.density as Density)
-    : DEFAULT_CONFIG.density;
+  const density: Density =
+    o.density === 'auto'
+      ? 'auto'
+      : typeof o.density === 'number' && Number.isFinite(o.density) && o.density >= 1
+        ? Math.floor(o.density)
+        : DEFAULT_CONFIG.density;
 
   const autoRotate =
     typeof o.autoRotate === 'boolean' ? o.autoRotate : DEFAULT_CONFIG.autoRotate;

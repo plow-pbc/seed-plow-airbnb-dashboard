@@ -9,7 +9,6 @@ type Props = {
   onClose: () => void;
 };
 
-const DENSITIES: Density[] = ['auto', 1, 2, 3];
 const ROTATE_STEP = 5; // seconds per +/- tap
 
 // The ⚙ overlay. Every control writes straight through onChange; App persists
@@ -17,6 +16,9 @@ const ROTATE_STEP = 5; // seconds per +/- tap
 // kiosk screen.
 export function SettingsPanel({ views, config, onChange, onClose }: Props) {
   const enabledCount = views.filter((v) => !config.disabledViewIds.includes(v.id)).length;
+  // Numeric density caps at the number of enabled views — pinning more panels
+  // than there are views to fill them would just leave empty cells.
+  const densities: Density[] = ['auto', ...Array.from({ length: enabledCount }, (_, i) => i + 1)];
 
   const toggleView = (id: string) => {
     const disabled = config.disabledViewIds.includes(id);
@@ -75,7 +77,7 @@ export function SettingsPanel({ views, config, onChange, onClose }: Props) {
         <section className="settings-section">
           <h3>Panels per page</h3>
           <div className="settings-row">
-            {DENSITIES.map((d) => (
+            {densities.map((d) => (
               <button
                 key={String(d)}
                 type="button"
