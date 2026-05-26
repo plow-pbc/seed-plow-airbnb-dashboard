@@ -15,7 +15,7 @@ This SEED performs a **one-time install** of the plow-airbnb-dashboard calendar 
 
 Every deploy command therefore runs *on the target Pi*. A helper, [[#^obj-seed-sh]] (`seed_sh`), hides the local/remote split: it reads a script on stdin and runs it on the target. The steps below are written once, against the target, and work in both modes.
 
-Secret hygiene: the calendar credential (an `.ics` URL or a Hostex access token) and the Pi password are secrets. No step places either on a process command line (`argv`); the password is never read into the agent's context at all (see [[#^act-link]]).
+Secret hygiene: the calendar credentials (an `.ics` URL, a Hostex access token, or both) and the Pi password are secrets. No step places either on a process command line (`argv`); the password is never read into the agent's context at all (see [[#^act-link]]).
 
 The Bash tool does not persist shell state between calls — so every step that uses `seed_sh` first `source`s the config file written in Step 1.
 
@@ -29,9 +29,9 @@ All shell blocks below are `tier-2`: each MUST be displayed in full and confirme
 
 ### Calendar access
 
-- **One** calendar credential — the dashboard's only data source — collected in [[#^act-collect]] and written to [[#^obj-env]]. Treated as a secret. It is either:
-  - a private **`.ics` calendar URL** (the dashboard shows an event list), **or**
-  - a **Hostex OpenAPI access token** (the dashboard shows a reservation-timeline view instead).
+- **At least one** calendar credential — the dashboard's data sources — collected in [[#^act-collect]] and written to [[#^obj-env]]. Each one supplied becomes its own dashboard panel; supplying both shows both side-by-side. Treated as secrets. The available credentials are:
+  - a private **`.ics` calendar URL** (an event-list panel), **and/or**
+  - a **Hostex OpenAPI access token** (a reservation-timeline panel).
 
 ### Software
 
@@ -46,12 +46,12 @@ Collect, per [[#^act-collect]]:
 | Parameter | Tier | Notes |
 |---|---|---|
 | Install mode | `tier-2` | `local` or `remote`. |
-| Calendar credential | `tier-3` | An `.ics` URL **or** a Hostex access token. Secret — held by the agent, not stored in `install.env`. |
+| Calendar credentials | `tier-3` | An `.ics` URL **and/or** a Hostex access token — at least one is required; supplying both shows both panels. Secrets — held by the agent, not stored in `install.env`. |
 | Pi IP address | `tier-3` | remote mode only. IPv4 of the Pi. |
 | Pi username | `tier-3` | remote mode only. The Pi login user. |
 | Target user | `tier-1` | local mode: the output of `id -un` (report it). remote mode: equals the Pi username. |
 
-Write the collected values into a config file — but **not** the calendar credential: it is a secret and `install.env` is not access-restricted, so the agent keeps the value it collected in this step in context and writes it only into the mode-`600` [[#^obj-env]] in Step 4. Fill the four values below; leave `PI_*` blank for a local install:
+Write the collected values into a config file — but **not** the calendar credentials: they are secrets and `install.env` is not access-restricted, so the agent keeps the values it collected in this step in context and writes them only into the mode-`600` [[#^obj-env]] in Step 4. Fill the four values below; leave `PI_*` blank for a local install:
 
 ```sh
 mkdir -p ~/.config/seed-airbnb
@@ -215,16 +215,22 @@ npm run build
 EOF
 ```
 
-Create `.env` from `.env.example`, lock it to mode `600`, and fill in the calendar credential collected in Step 1 — do **not** prompt for it again. Set `CAL_VAR` to `ICAL_URL` for an `.ics` URL or to `HOSTEX_ACCESS_TOKEN` for a Hostex token, and `CAL_VALUE` to the secret itself. This block uses an **unquoted** heredoc so both expand locally and the secret travels via stdin, never `argv` (`\$DASH_DIR` is escaped so it expands on the target):
+Create `.env` from `.env.example`, lock it to mode `600`, and fill in the calendar credentials collected in Step 1 — do **not** prompt for them again. Fill `ICAL_URL_VALUE` and/or `HOSTEX_TOKEN_VALUE` from the secrets the agent is holding; leave the other empty to omit it. At least one MUST be non-empty — the block aborts if both are blank. This block uses an **unquoted** heredoc so the secrets expand locally and travel via stdin, never `argv` (`\$DASH_DIR` is escaped so it expands on the target):
 
 ```sh
 source ~/.config/seed-airbnb/install.env
-CAL_VAR='ICAL_URL'                              # or HOSTEX_ACCESS_TOKEN
-CAL_VALUE='<calendar credential collected in Step 1>'
+ICAL_URL_VALUE=''                               # set if collected; empty omits it
+HOSTEX_TOKEN_VALUE=''                           # set if collected; empty omits it
 seed_sh <<EOF
 set -eu
 cd "\$DASH_DIR"
-{ grep -vE '^(ICAL_URL|HOSTEX_ACCESS_TOKEN)=' .env.example; printf '%s=%s\n' '$CAL_VAR' '$CAL_VALUE'; } > .env
+[ -n '$ICAL_URL_VALUE' ] || [ -n '$HOSTEX_TOKEN_VALUE' ] \
+  || { echo "no calendar credential supplied — at least one of ICAL_URL or HOSTEX_ACCESS_TOKEN is required" >&2; exit 1; }
+{
+  grep -vE '^(ICAL_URL|HOSTEX_ACCESS_TOKEN)=' .env.example
+  [ -n '$ICAL_URL_VALUE'     ] && printf 'ICAL_URL=%s\n'            '$ICAL_URL_VALUE'     ||:
+  [ -n '$HOSTEX_TOKEN_VALUE' ] && printf 'HOSTEX_ACCESS_TOKEN=%s\n' '$HOSTEX_TOKEN_VALUE' ||:
+} > .env
 chmod 600 .env
 EOF
 ```
@@ -371,7 +377,7 @@ The named entities that exist once [[#^act-deploy-kiosk]] completes.
 
 ### Environment file ^obj-env
 
-- `.env` inside [[#^obj-dash-dir]], mode `600`, derived from `.env.example`. Holds the calendar credential the dashboard proxies — either `ICAL_URL` (a private `.ics` URL) or `HOSTEX_ACCESS_TOKEN` (a Hostex access token).
+- `.env` inside [[#^obj-dash-dir]], mode `600`, derived from `.env.example`. Holds the calendar credentials the dashboard proxies — `ICAL_URL` (a private `.ics` URL) and/or `HOSTEX_ACCESS_TOKEN` (a Hostex access token); at least one is set, both are allowed (each becomes its own dashboard panel).
 
 ### Dashboard service ^obj-dashboard-service
 
@@ -390,10 +396,10 @@ The verbs performed during the install. Each maps to a checklist the agent track
 The agent gathers the install mode and credentials, then writes `~/.config/seed-airbnb/install.env`.
 
 1. Ask the user for the install mode — `local` or `remote` (`tier-2`).
-2. Ask for the calendar credential (`tier-3`) — either a private `.ics` calendar URL or a Hostex access token; collected up front, here, so the user is not stopped for it partway through the install; the agent holds it in context for [[#^act-deploy-dashboard]].
+2. Ask for the calendar credentials (`tier-3`) — a private `.ics` calendar URL and/or a Hostex access token. At least one is required; both are accepted (each becomes its own dashboard panel). Collected up front, here, so the user is not stopped for them partway through the install; the agent holds them in context for [[#^act-deploy-dashboard]].
 3. In remote mode, ask for the Pi's IP address and login username (`tier-3`).
 4. Resolve the target user: in local mode run `id -un` and report it (`tier-1`); in remote mode it is the Pi username.
-5. Write [[#^dep-collect]]'s `install.env` with those values and confirm it — the calendar credential is deliberately **not** written there (it is a secret; see [[#^dep-collect]]).
+5. Write [[#^dep-collect]]'s `install.env` with those values and confirm it — the calendar credentials are deliberately **not** written there (they are secrets; see [[#^dep-collect]]).
 
 ### Remote access is established ^act-link
 
@@ -419,7 +425,7 @@ The agent installs and starts [[#^obj-dashboard-service]].
 
 1. Clone or update [[#^obj-dash-dir]] on the target.
 2. Run `npm ci` and `npm run build`.
-3. Create [[#^obj-env]] from `.env.example`, `chmod 600` it, and set the calendar credential — `ICAL_URL` or `HOSTEX_ACCESS_TOKEN` — collected in [[#^act-collect]]; no new prompt.
+3. Create [[#^obj-env]] from `.env.example`, `chmod 600` it, and set the calendar credentials — `ICAL_URL` and/or `HOSTEX_ACCESS_TOKEN` — collected in [[#^act-collect]]; no new prompt.
 4. Replace `odio` with the target user throughout `plow-airbnb-dashboard.service`.
 5. Copy the unit to `/etc/systemd/system/`, `daemon-reload`, `enable --now`.
 6. Confirm `systemctl is-active` is `active` and `/healthz` returns `ok`. Per [[#^dep-dashboard]].
