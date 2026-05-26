@@ -1,0 +1,17 @@
+{
+  "name": "guesty-dtu",
+  "version": "1.0.0",
+  "description": "Guesty Digital Twin Unit — in-memory mock of Guesty's Open API for local dev and tests.",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0"
+  }
+}
