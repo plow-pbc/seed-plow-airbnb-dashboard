@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import type { Size } from '../layout';
-import type { Event, HostexHome } from '../types';
+import type { Event, HostexHome, GuestyHome } from '../types';
 import { CalendarView } from './CalendarView';
 import { ReservationsView } from './ReservationsView';
+import { GuestyReservationsView } from './GuestyReservationsView';
 import { ClockView } from './ClockView';
 
 // A view is one panel the dashboard can tile. New views are added by writing a
@@ -21,14 +22,16 @@ export type ViewDef = {
   render: () => ReactNode;
 };
 
-// One configured calendar source, parsed from /api/calendar. ICAL_URL and
-// HOSTEX_ACCESS_TOKEN are independent — zero, one, or both may be present.
-// `error` marks a source that failed to load this cycle; its panel still
-// shows (with a retry notice) so the layout stays put.
+// One configured calendar source, parsed from /api/calendar. ICAL_URL,
+// HOSTEX_ACCESS_TOKEN, and the Guesty credential pair are independent —
+// zero, one, two, or all three may be present. `error` marks a source that
+// failed to load this cycle; its panel still shows (with a retry notice)
+// so the layout stays put.
 export type CalendarSource =
   | { source: 'ical'; events: Event[] }
   | { source: 'hostex'; homes: HostexHome[] }
-  | { source: 'ical' | 'hostex'; error: true };
+  | { source: 'guesty'; homes: GuestyHome[] }
+  | { source: 'ical' | 'hostex' | 'guesty'; error: true };
 
 // Panel identity per source kind — kept constant whether the source loaded or
 // errored, so settings toggles and grid placement survive an error cycle.
@@ -36,6 +39,11 @@ const CALENDAR_META = {
   ical: { id: 'calendar', title: 'Calendar', minSize: { width: 360, height: 320 } },
   // The 14-day timeline needs real width before it stops feeling cramped.
   hostex: { id: 'reservations', title: 'Reservations', minSize: { width: 640, height: 360 } },
+  guesty: {
+    id: 'guesty-reservations',
+    title: 'Guesty Reservations',
+    minSize: { width: 640, height: 360 },
+  },
 } as const;
 
 const CLOCK_VIEW: ViewDef = {
@@ -61,7 +69,17 @@ export function buildViews(sources: CalendarSource[]): ViewDef[] {
     if (src.source === 'ical') {
       return { ...meta, render: () => <CalendarView events={src.events} /> };
     }
-    return { ...meta, render: () => <ReservationsView homes={src.homes} /> };
+    if (src.source === 'hostex') {
+      return { ...meta, render: () => <ReservationsView homes={src.homes} /> };
+    }
+    if (src.source === 'guesty') {
+      return { ...meta, render: () => <GuestyReservationsView homes={src.homes} /> };
+    }
+    // Exhaustiveness guard: TS narrows `src` to `never`. Throw protects
+    // against a wire envelope sprouting a new source the client doesn't
+    // know how to render yet — better a loud failure than a blank panel.
+    const _exhaustive: never = src;
+    throw new Error(`Unknown calendar source: ${JSON.stringify(_exhaustive)}`);
   });
 
   views.push(CLOCK_VIEW);

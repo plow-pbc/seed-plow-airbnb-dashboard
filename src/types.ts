@@ -23,3 +23,18 @@ export type HostexHome = {
   reservations: Reservation[];
   blocked: string[]; // YYYY-MM-DD dates the home is unavailable but unreserved
 };
+
+// Guesty reservation-timeline source. Shape mirrors Hostex's; the extra
+// `status` field lets the client paint channel-pending holds ('reserved')
+// distinctly from accepted bookings ('confirmed').
+export interface GuestyReservation extends Reservation {
+  status: 'confirmed' | 'reserved';
+}
+
+export interface GuestyHome {
+  id: string; // Guesty Mongo-style _id
+  name: string;
+  cover: string | null;
+  reservations: GuestyReservation[];
+  blocked: string[];
+}

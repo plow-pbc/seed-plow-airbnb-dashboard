@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 .env.local
+.guesty-token.json
 .DS_Store
 docs/plans/
 *.log

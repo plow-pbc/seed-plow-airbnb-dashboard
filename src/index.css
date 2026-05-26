@@ -443,16 +443,32 @@ html[data-rotation='270'] body {
   text-overflow: ellipsis;
 }
 
+/* Use background-color (not the `background` shorthand) so the per-phase
+   colour doesn't reset `background-image` to none — the pending-stripe
+   overlay below relies on layering its repeating-linear-gradient on top. */
 .tl-resv.current {
-  background: #c65f76;
+  background-color: #c65f76;
 }
 
 .tl-resv.upcoming {
-  background: #5f9b6f;
+  background-color: #5f9b6f;
 }
 
 .tl-resv.past {
-  background: #9aa0a6;
+  background-color: #9aa0a6;
+}
+
+/* Guesty: channel-pending holds (status='reserved') overlay diagonal
+   stripes on the phase color, so users can tell a held-but-unconfirmed
+   booking from a confirmed one at a glance. */
+.tl-resv-pending {
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0) 6px,
+    rgba(255, 255, 255, 0.28) 6px,
+    rgba(255, 255, 255, 0.28) 12px
+  );
 }
 
 /* --- Dashboard grid, panels & tabs ----------------------------------- */

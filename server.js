@@ -1,37 +1,18 @@
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createApp } from './src/server/app.js';
-import { fetchHostexCalendar } from './src/server/hostex.js';
+import { buildSources } from './src/server/sources.js';
 
-// Calendar sources: ICAL_URL and/or HOSTEX_ACCESS_TOKEN. Both may be set —
-// each configured source becomes its own dashboard panel. /api/calendar
-// resolves to { sources: [...] }, one entry per source, each tagged with its
-// `source` so the client knows which view to render.
-const ICAL_URL = process.env.ICAL_URL;
-const HOSTEX_ACCESS_TOKEN = process.env.HOSTEX_ACCESS_TOKEN;
-
-const sources = [];
-if (ICAL_URL) {
-  sources.push({
-    kind: 'ical',
-    fetch: async () => {
-      const res = await fetch(ICAL_URL, { signal: AbortSignal.timeout(10_000) });
-      if (!res.ok) throw new Error(`ICS upstream returned HTTP ${res.status}`);
-      return { source: 'ical', ics: await res.text() };
-    },
-  });
-}
-if (HOSTEX_ACCESS_TOKEN) {
-  sources.push({
-    kind: 'hostex',
-    fetch: async () => {
-      const data = await fetchHostexCalendar(HOSTEX_ACCESS_TOKEN, new Date());
-      return { source: 'hostex', ...data };
-    },
-  });
-}
+// Calendar sources: ICAL_URL, HOSTEX_ACCESS_TOKEN, and/or a Guesty
+// (GUESTY_CLIENT_ID + GUESTY_CLIENT_SECRET) pair. Any combination may be
+// set — each configured source becomes its own dashboard panel.
+// /api/calendar resolves to { sources: [...] }, one entry per source, each
+// tagged with its `source` so the client knows which view to render.
+const sources = buildSources(process.env);
 if (sources.length === 0) {
-  console.error('FATAL: set ICAL_URL and/or HOSTEX_ACCESS_TOKEN in .env');
+  console.error(
+    'FATAL: set at least one of: ICAL_URL; HOSTEX_ACCESS_TOKEN; or both GUESTY_CLIENT_ID and GUESTY_CLIENT_SECRET',
+  );
   process.exit(1);
 }
 console.log(`Calendar sources: ${sources.map((s) => s.kind).join(', ')}`);

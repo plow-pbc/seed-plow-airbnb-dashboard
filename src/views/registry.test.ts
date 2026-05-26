@@ -16,6 +16,13 @@ describe('buildViews', () => {
     expect(buildViews(sources).map((v) => v.id)).toEqual(['reservations', 'clock']);
   });
 
+  it('adds a Guesty Reservations panel for a Guesty source', () => {
+    const sources: CalendarSource[] = [{ source: 'guesty', homes: [] }];
+    const views = buildViews(sources);
+    expect(views.map((v) => v.id)).toEqual(['guesty-reservations', 'clock']);
+    expect(views[0].title).toBe('Guesty Reservations');
+  });
+
   it('shows both calendar panels when both sources are configured', () => {
     const sources: CalendarSource[] = [
       { source: 'ical', events: [] },
@@ -24,11 +31,31 @@ describe('buildViews', () => {
     expect(buildViews(sources).map((v) => v.id)).toEqual(['calendar', 'reservations', 'clock']);
   });
 
+  it('shows all three calendar panels when ical, hostex, and guesty are all configured', () => {
+    const sources: CalendarSource[] = [
+      { source: 'ical', events: [] },
+      { source: 'hostex', homes: [] },
+      { source: 'guesty', homes: [] },
+    ];
+    expect(buildViews(sources).map((v) => v.id)).toEqual([
+      'calendar',
+      'reservations',
+      'guesty-reservations',
+      'clock',
+    ]);
+  });
+
   it('still shows the panel for a source that failed to load', () => {
     const views = buildViews([{ source: 'hostex', error: true }]);
     // Same stable id/title as a healthy Hostex source, so settings toggles and
     // grid placement survive the error cycle.
     expect(views.map((v) => v.id)).toEqual(['reservations', 'clock']);
     expect(views[0].title).toBe('Reservations');
+  });
+
+  it('still shows the Guesty Reservations panel for a guesty source that failed to load', () => {
+    const views = buildViews([{ source: 'guesty', error: true }]);
+    expect(views.map((v) => v.id)).toEqual(['guesty-reservations', 'clock']);
+    expect(views[0].title).toBe('Guesty Reservations');
   });
 });

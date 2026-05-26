@@ -15,7 +15,7 @@ This SEED performs a **one-time install** of the plow-airbnb-dashboard calendar 
 
 Every deploy command therefore runs *on the target Pi*. A helper, [[#^obj-seed-sh]] (`seed_sh`), hides the local/remote split: it reads a script on stdin and runs it on the target. The steps below are written once, against the target, and work in both modes.
 
-Secret hygiene: the calendar credentials (an `.ics` URL, a Hostex access token, or both) and the Pi password are secrets. No step places either on a process command line (`argv`); the password is never read into the agent's context at all (see [[#^act-link]]).
+Secret hygiene: the calendar credentials (an `.ics` URL, a Hostex access token, a Guesty `CLIENT_ID`+`CLIENT_SECRET` pair, or any combination) and the Pi password are secrets. No step places either on a process command line (`argv`); the password is never read into the agent's context at all (see [[#^act-link]]).
 
 The Bash tool does not persist shell state between calls — so every step that uses `seed_sh` first `source`s the config file written in Step 1.
 
@@ -29,9 +29,10 @@ All shell blocks below are `tier-2`: each MUST be displayed in full and confirme
 
 ### Calendar access
 
-- **At least one** calendar credential — the dashboard's data sources — collected in [[#^act-collect]] and written to [[#^obj-env]]. Each one supplied becomes its own dashboard panel; supplying both shows both side-by-side. Treated as secrets. The available credentials are:
-  - a private **`.ics` calendar URL** (an event-list panel), **and/or**
-  - a **Hostex OpenAPI access token** (a reservation-timeline panel).
+- **At least one** calendar credential — the dashboard's data sources — collected in [[#^act-collect]] and written to [[#^obj-env]]. Each source supplied becomes its own dashboard panel; supplying multiple shows them side-by-side. Treated as secrets. The available credentials are:
+  - a private **`.ics` calendar URL** (an event-list panel),
+  - a **Hostex OpenAPI access token** (a reservation-timeline panel), **and/or**
+  - a **Guesty Open API credential pair** — both `GUESTY_CLIENT_ID` and `GUESTY_CLIENT_SECRET` (a reservation-timeline panel; both vars are required for the panel to appear).
 
 ### Software
 
@@ -46,7 +47,11 @@ Collect, per [[#^act-collect]]:
 | Parameter | Tier | Notes |
 |---|---|---|
 | Install mode | `tier-2` | `local` or `remote`. |
-| Calendar credentials | `tier-3` | An `.ics` URL **and/or** a Hostex access token — at least one is required; supplying both shows both panels. Secrets — held by the agent, not stored in `install.env`. |
+| Calendar credentials — `.ics` URL | `tier-3` | Optional. Adds the event-list panel. Secret — held by the agent, not stored in `install.env`. |
+| Calendar credentials — Hostex access token | `tier-3` | Optional. Adds the Hostex reservations panel. Secret. |
+| Calendar credentials — Guesty `CLIENT_ID` | `tier-3` | Optional. Must be paired with the Guesty `CLIENT_SECRET` below to add the Guesty reservations panel. Secret. |
+| Calendar credentials — Guesty `CLIENT_SECRET` | `tier-3` | Optional. Must be paired with the Guesty `CLIENT_ID` above. Secret. |
+| (At least one source) | — | The four credentials above are individually optional, but **at least one source** is required: the `.ics` URL, the Hostex token, or **both** Guesty vars. Any combination is accepted. |
 | Pi IP address | `tier-3` | remote mode only. IPv4 of the Pi. |
 | Pi username | `tier-3` | remote mode only. The Pi login user. |
 | Target user | `tier-1` | local mode: the output of `id -un` (report it). remote mode: equals the Pi username. |
@@ -215,21 +220,28 @@ npm run build
 EOF
 ```
 
-Create `.env` from `.env.example`, lock it to mode `600`, and fill in the calendar credentials collected in Step 1 — do **not** prompt for them again. Fill `ICAL_URL_VALUE` and/or `HOSTEX_TOKEN_VALUE` from the secrets the agent is holding; leave the other empty to omit it. At least one MUST be non-empty — the block aborts if both are blank. This block uses an **unquoted** heredoc so the secrets expand locally and travel via stdin, never `argv` (`\$DASH_DIR` is escaped so it expands on the target):
+Create `.env` from `.env.example`, lock it to mode `600`, and fill in the calendar credentials collected in Step 1 — do **not** prompt for them again. Fill `ICAL_URL_VALUE`, `HOSTEX_TOKEN_VALUE`, and/or the Guesty pair (`GUESTY_CLIENT_ID_VALUE` + `GUESTY_CLIENT_SECRET_VALUE`) from the secrets the agent is holding; leave any unused ones empty. At least one source MUST be non-empty (Guesty needs **both** vars to count as a source) — the block aborts otherwise. This block uses an **unquoted** heredoc so the secrets expand locally and travel via stdin, never `argv` (`\$DASH_DIR` is escaped so it expands on the target):
 
 ```sh
 source ~/.config/seed-airbnb/install.env
 ICAL_URL_VALUE=''                               # set if collected; empty omits it
 HOSTEX_TOKEN_VALUE=''                           # set if collected; empty omits it
+GUESTY_CLIENT_ID_VALUE=''                       # set if collected; both Guesty
+GUESTY_CLIENT_SECRET_VALUE=''                   # vars required to enable Guesty
 seed_sh <<EOF
 set -eu
 cd "\$DASH_DIR"
 [ -n '$ICAL_URL_VALUE' ] || [ -n '$HOSTEX_TOKEN_VALUE' ] \
-  || { echo "no calendar credential supplied — at least one of ICAL_URL or HOSTEX_ACCESS_TOKEN is required" >&2; exit 1; }
+  || { [ -n '$GUESTY_CLIENT_ID_VALUE' ] && [ -n '$GUESTY_CLIENT_SECRET_VALUE' ]; } \
+  || { echo "no calendar credential supplied — at least one of ICAL_URL, HOSTEX_ACCESS_TOKEN, or both GUESTY_CLIENT_ID and GUESTY_CLIENT_SECRET is required" >&2; exit 1; }
 {
-  grep -vE '^(ICAL_URL|HOSTEX_ACCESS_TOKEN)=' .env.example
-  [ -n '$ICAL_URL_VALUE'     ] && printf 'ICAL_URL=%s\n'            '$ICAL_URL_VALUE'     ||:
-  [ -n '$HOSTEX_TOKEN_VALUE' ] && printf 'HOSTEX_ACCESS_TOKEN=%s\n' '$HOSTEX_TOKEN_VALUE' ||:
+  grep -vE '^(ICAL_URL|HOSTEX_ACCESS_TOKEN|GUESTY_CLIENT_ID|GUESTY_CLIENT_SECRET)=' .env.example
+  [ -n '$ICAL_URL_VALUE'             ] && printf 'ICAL_URL=%s\n'             '$ICAL_URL_VALUE'             ||:
+  [ -n '$HOSTEX_TOKEN_VALUE'         ] && printf 'HOSTEX_ACCESS_TOKEN=%s\n'  '$HOSTEX_TOKEN_VALUE'         ||:
+  if [ -n '$GUESTY_CLIENT_ID_VALUE' ] && [ -n '$GUESTY_CLIENT_SECRET_VALUE' ]; then
+    printf 'GUESTY_CLIENT_ID=%s\n'     '$GUESTY_CLIENT_ID_VALUE'
+    printf 'GUESTY_CLIENT_SECRET=%s\n' '$GUESTY_CLIENT_SECRET_VALUE'
+  fi
 } > .env
 chmod 600 .env
 EOF
@@ -377,7 +389,7 @@ The named entities that exist once [[#^act-deploy-kiosk]] completes.
 
 ### Environment file ^obj-env
 
-- `.env` inside [[#^obj-dash-dir]], mode `600`, derived from `.env.example`. Holds the calendar credentials the dashboard proxies — `ICAL_URL` (a private `.ics` URL) and/or `HOSTEX_ACCESS_TOKEN` (a Hostex access token); at least one is set, both are allowed (each becomes its own dashboard panel).
+- `.env` inside [[#^obj-dash-dir]], mode `600`, derived from `.env.example`. Holds the calendar credentials the dashboard proxies — `ICAL_URL` (a private `.ics` URL), `HOSTEX_ACCESS_TOKEN` (a Hostex access token), and/or the Guesty pair `GUESTY_CLIENT_ID` + `GUESTY_CLIENT_SECRET` (both required together); at least one source is set, multiple are allowed (each becomes its own dashboard panel).
 
 ### Dashboard service ^obj-dashboard-service
 
@@ -396,7 +408,7 @@ The verbs performed during the install. Each maps to a checklist the agent track
 The agent gathers the install mode and credentials, then writes `~/.config/seed-airbnb/install.env`.
 
 1. Ask the user for the install mode — `local` or `remote` (`tier-2`).
-2. Ask for the calendar credentials (`tier-3`) — a private `.ics` calendar URL and/or a Hostex access token. At least one is required; both are accepted (each becomes its own dashboard panel). Collected up front, here, so the user is not stopped for them partway through the install; the agent holds them in context for [[#^act-deploy-dashboard]].
+2. Ask for the calendar credentials (`tier-3`), prompting **separately** for each secret to match the SEED's per-secret pattern — a private `.ics` calendar URL, a Hostex access token, and/or the Guesty `CLIENT_ID` + `CLIENT_SECRET` pair (both Guesty vars must be supplied together for the panel to enable). At least one source is required; any combination is accepted (each becomes its own dashboard panel). Collected up front, here, so the user is not stopped for them partway through the install; the agent holds them in context for [[#^act-deploy-dashboard]].
 3. In remote mode, ask for the Pi's IP address and login username (`tier-3`).
 4. Resolve the target user: in local mode run `id -un` and report it (`tier-1`); in remote mode it is the Pi username.
 5. Write [[#^dep-collect]]'s `install.env` with those values and confirm it — the calendar credentials are deliberately **not** written there (they are secrets; see [[#^dep-collect]]).
@@ -425,7 +437,7 @@ The agent installs and starts [[#^obj-dashboard-service]].
 
 1. Clone or update [[#^obj-dash-dir]] on the target.
 2. Run `npm ci` and `npm run build`.
-3. Create [[#^obj-env]] from `.env.example`, `chmod 600` it, and set the calendar credentials — `ICAL_URL` and/or `HOSTEX_ACCESS_TOKEN` — collected in [[#^act-collect]]; no new prompt.
+3. Create [[#^obj-env]] from `.env.example`, `chmod 600` it, and set the calendar credentials — `ICAL_URL`, `HOSTEX_ACCESS_TOKEN`, and/or the Guesty pair `GUESTY_CLIENT_ID` + `GUESTY_CLIENT_SECRET` — collected in [[#^act-collect]]; no new prompt.
 4. Replace `odio` with the target user throughout `plow-airbnb-dashboard.service`.
 5. Copy the unit to `/etc/systemd/system/`, `daemon-reload`, `enable --now`.
 6. Confirm `systemctl is-active` is `active` and `/healthz` returns `ok`. Per [[#^dep-dashboard]].
@@ -471,7 +483,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
    ```sh
    source ~/.config/seed-airbnb/install.env
    seed_sh <<'EOF'
-   stat -c '%a' "$DASH_DIR/.env" && grep -qE '^(ICAL_URL|HOSTEX_ACCESS_TOKEN)=.' "$DASH_DIR/.env" && echo credential-set
+   stat -c '%a' "$DASH_DIR/.env" && grep -qE '^(ICAL_URL|HOSTEX_ACCESS_TOKEN|GUESTY_CLIENT_ID|GUESTY_CLIENT_SECRET)=.' "$DASH_DIR/.env" && echo credential-set
    EOF
    ```
 

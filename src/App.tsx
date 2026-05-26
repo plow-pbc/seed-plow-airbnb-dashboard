@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { parseICS } from './ical';
-import type { HostexHome } from './types';
+import type { HostexHome, GuestyHome } from './types';
 import { Message } from './components/Message';
 import { Dashboard } from './components/Dashboard';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -17,13 +17,14 @@ const timeFmt = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
 });
 
-// The /api/calendar envelope — one entry per configured source (ICAL_URL
-// and/or HOSTEX_ACCESS_TOKEN), each tagged with its `source`. `error` marks a
-// source that failed to load this cycle.
+// The /api/calendar envelope — one entry per configured source (ICAL_URL,
+// HOSTEX_ACCESS_TOKEN, and/or GUESTY_CLIENT_ID+SECRET), each tagged with its
+// `source`. `error` marks a source that failed to load this cycle.
 type RawSource =
   | { source: 'ical'; ics: string }
   | { source: 'hostex'; homes: HostexHome[] }
-  | { source: 'ical' | 'hostex'; error: true };
+  | { source: 'guesty'; homes: GuestyHome[] }
+  | { source: 'ical' | 'hostex' | 'guesty'; error: true };
 type CalendarResponse = { sources: RawSource[] };
 
 type State =
@@ -63,7 +64,13 @@ export function App() {
         const sources: CalendarSource[] = body.sources.map((s) => {
           if ('error' in s) return { source: s.source, error: true };
           if (s.source === 'ical') return { source: 'ical', events: parseICS(s.ics, now, NEXT_N) };
-          return { source: 'hostex', homes: s.homes };
+          if (s.source === 'hostex') return { source: 'hostex', homes: s.homes };
+          if (s.source === 'guesty') return { source: 'guesty', homes: s.homes };
+          // Exhaustiveness guard: any new wire-source variant must be handled
+          // explicitly above. TS narrows `s` to `never` here at compile time;
+          // the throw catches a runtime envelope from a future server.
+          const _exhaustive: never = s;
+          throw new Error(`Unknown calendar source: ${JSON.stringify(_exhaustive)}`);
         });
         setState({ kind: 'loaded', sources, fetchedAt: now });
       } catch {
