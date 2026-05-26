@@ -111,7 +111,7 @@ html[data-rotation='270'] body {
 
 .icon-btn {
   font: inherit;
-  font-size: 0.55em;
+  font-size: 0.6em;
   line-height: 1;
   padding: 0.4em 0.7em;
   border: 1px solid var(--row-border);
@@ -120,6 +120,25 @@ html[data-rotation='270'] body {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35em;
+}
+
+/* Symbol glyphs (⚙, ⟳) sit higher than text on their baseline, so we
+ * size them in their own span and let inline-flex center them against
+ * the rest of the button content. */
+.icon-btn .icon-glyph {
+  font-size: 1.5em;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
+.icon-btn .icon-btn-label {
+  display: inline-flex;
+  align-items: center;
 }
 
 .icon-btn:active {

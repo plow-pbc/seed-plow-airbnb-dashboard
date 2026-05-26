@@ -124,7 +124,7 @@ export function App() {
             aria-label="Settings"
             title="Settings"
           >
-            ⚙
+            <span className="icon-glyph" aria-hidden="true">⚙</span>
           </button>
           <button
             type="button"
@@ -133,7 +133,8 @@ export function App() {
             aria-label="Rotate display"
             title="Rotate display"
           >
-            ⟳ {rotation}°
+            <span className="icon-glyph" aria-hidden="true">⟳</span>
+            <span className="icon-btn-label">{rotation}°</span>
           </button>
         </div>
       </header>
