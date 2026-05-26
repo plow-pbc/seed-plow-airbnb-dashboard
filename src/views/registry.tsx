@@ -38,7 +38,7 @@ export type CalendarSource =
 const CALENDAR_META = {
   ical: { id: 'calendar', title: 'Calendar', minSize: { width: 360, height: 320 } },
   // The 14-day timeline needs real width before it stops feeling cramped.
-  hostex: { id: 'reservations', title: 'Reservations', minSize: { width: 640, height: 360 } },
+  hostex: { id: 'reservations', title: 'Hostex Reservations', minSize: { width: 640, height: 360 } },
   guesty: {
     id: 'guesty-reservations',
     title: 'Guesty Reservations',

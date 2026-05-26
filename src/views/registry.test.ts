@@ -50,7 +50,7 @@ describe('buildViews', () => {
     // Same stable id/title as a healthy Hostex source, so settings toggles and
     // grid placement survive the error cycle.
     expect(views.map((v) => v.id)).toEqual(['reservations', 'clock']);
-    expect(views[0].title).toBe('Reservations');
+    expect(views[0].title).toBe('Hostex Reservations');
   });
 
   it('still shows the Guesty Reservations panel for a guesty source that failed to load', () => {
