@@ -27,7 +27,7 @@ export const DEFAULT_CONFIG: DashboardConfig = {
   disabledViewIds: [],
   density: 'auto',
   autoRotate: false,
-  rotateSeconds: 10,
+  rotateSeconds: 5,
 };
 
 function clamp(n: number, lo: number, hi: number): number {

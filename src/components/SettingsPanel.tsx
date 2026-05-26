@@ -9,7 +9,7 @@ type Props = {
   onClose: () => void;
 };
 
-const ROTATE_STEP = 5; // seconds per +/- tap
+const ROTATE_STEP = 1; // seconds per +/- tap
 
 // The ⚙ overlay. Every control writes straight through onChange; App persists
 // the result to localStorage. Controls are all taps — no keyboard needed on a
