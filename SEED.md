@@ -1,6 +1,6 @@
 # Purpose
 
-> See [[README#Purpose]].
+> See [the README](README.md#purpose).
 
 ## Normative Language
 
@@ -13,9 +13,9 @@ This SEED performs a **one-time install** of the plow-airbnb-dashboard calendar 
 - **local** — the Pi is *this* machine; every deploy command runs in a local shell.
 - **remote** — the Pi is reached over the network; every deploy command runs on it over SSH from this machine.
 
-Every deploy command therefore runs *on the target Pi*. A helper, [[#^obj-seed-sh]] (`seed_sh`), hides the local/remote split: it reads a script on stdin and runs it on the target. The steps below are written once, against the target, and work in both modes.
+Every deploy command therefore runs *on the target Pi*. A helper, the [`seed_sh` helper](#seed_sh-helper), hides the local/remote split: it reads a script on stdin and runs it on the target. The steps below are written once, against the target, and work in both modes.
 
-Secret hygiene: the calendar credentials (an `.ics` URL, a Hostex access token, a Guesty `CLIENT_ID`+`CLIENT_SECRET` pair, or any combination) and the Pi password are secrets. No step places either on a process command line (`argv`); the password is never read into the agent's context at all (see [[#^act-link]]).
+Secret hygiene: the calendar credentials (an `.ics` URL, a Hostex access token, a Guesty `CLIENT_ID`+`CLIENT_SECRET` pair, or any combination) and the Pi password are secrets. No step places either on a process command line (`argv`); the password is never read into the agent's context at all (see [establishing remote access](#remote-access-is-established)).
 
 The Bash tool does not persist shell state between calls — so every step that uses `seed_sh` first `source`s the config file written in Step 1.
 
@@ -29,7 +29,7 @@ All shell blocks below are `tier-2`: each MUST be displayed in full and confirme
 
 ### Calendar access
 
-- **At least one** calendar credential — the dashboard's data sources — collected in [[#^act-collect]] and written to [[#^obj-env]]. Each source supplied becomes its own dashboard panel; supplying multiple shows them side-by-side. Treated as secrets. The available credentials are:
+- **At least one** calendar credential — the dashboard's data sources — collected when [install parameters are collected](#install-parameters-are-collected) and written to the [environment file](#environment-file). Each source supplied becomes its own dashboard panel; supplying multiple shows them side-by-side. Treated as secrets. The available credentials are:
   - a private **`.ics` calendar URL** (an event-list panel),
   - a **Hostex OpenAPI access token** (a reservation-timeline panel), **and/or**
   - a **Guesty Open API credential pair** — both `GUESTY_CLIENT_ID` and `GUESTY_CLIENT_SECRET` (a reservation-timeline panel; both vars are required for the panel to appear). **Experimental — gated:** Guesty is only offered when the environment variable `GUESTY_SUPPORT` is set in the agent's environment at SEED runtime. When it is unset, the agent MUST NOT mention or prompt for Guesty credentials anywhere in this SEED, MUST NOT count Guesty toward the "at least one source" requirement, and MUST leave the Guesty value variables empty in Step 4.
@@ -40,9 +40,9 @@ On the **target Pi**: `git`, Node.js ≥ 20.6 with `npm`, `chromium` (at `/usr/b
 
 On the **local machine** (remote mode only): a standard OpenSSH client — `ssh`, `ssh-keygen`, and `ssh-copy-id` — all included with OpenSSH on macOS and Linux. No other tooling is needed.
 
-### Step 1 — Collect install parameters ^dep-collect
+### Step 1 — Collect install parameters
 
-Collect, per [[#^act-collect]]:
+Collect, per [install parameters are collected](#install-parameters-are-collected):
 
 | Parameter | Tier | Notes |
 |---|---|---|
@@ -56,7 +56,7 @@ Collect, per [[#^act-collect]]:
 | Pi username | `tier-3` | remote mode only. The Pi login user. |
 | Target user | `tier-1` | local mode: the output of `id -un` (report it). remote mode: equals the Pi username. |
 
-Write the collected values into a config file — but **not** the calendar credentials: they are secrets and `install.env` is not access-restricted, so the agent keeps the values it collected in this step in context and writes them only into the mode-`600` [[#^obj-env]] in Step 4. Fill the four values below; leave `PI_*` blank for a local install:
+Write the collected values into a config file — but **not** the calendar credentials: they are secrets and `install.env` is not access-restricted, so the agent keeps the values it collected in this step in context and writes them only into the mode-`600` [environment file](#environment-file) in Step 4. Fill the four values below; leave `PI_*` blank for a local install:
 
 ```sh
 mkdir -p ~/.config/seed-airbnb
@@ -88,11 +88,11 @@ Confirm the file holds the right values before continuing:
 grep -E '^(INSTALL_MODE|TARGET_USER|PI_USER|PI_IP)=' ~/.config/seed-airbnb/install.env
 ```
 
-### Step 2 — Set up passwordless SSH ^dep-link
+### Step 2 — Set up passwordless SSH
 
-**remote mode only — skip this step entirely for a local install.** See [[#^act-link]].
+**remote mode only — skip this step entirely for a local install.** See [establishing remote access](#remote-access-is-established).
 
-A remote install runs every later step over SSH non-interactively, so the Pi must accept an SSH **key** with no password prompt. This SEED uses a **dedicated, passphrase-less install key** — `~/.ssh/id_ed25519_seed_airbnb`, minted just for this job — and never your personal key. A throwaway key for a one-time install is guaranteed passphrase-less (so `ssh-agent` state is irrelevant and no passphrase prompt can stall a step), leaves your real key untouched, and keeps exactly one known key in play. `ssh-copy-id` installs it on the Pi after a single password entry; every later `ssh` then pins it with `-i ... -o IdentitiesOnly=yes`, so no other key is ever offered. You run `ssh-copy-id` yourself, so the password goes straight into it and never passes through the agent. The key is removable once the install is done — see [[#^o-install-key]].
+A remote install runs every later step over SSH non-interactively, so the Pi must accept an SSH **key** with no password prompt. This SEED uses a **dedicated, passphrase-less install key** — `~/.ssh/id_ed25519_seed_airbnb`, minted just for this job — and never your personal key. A throwaway key for a one-time install is guaranteed passphrase-less (so `ssh-agent` state is irrelevant and no passphrase prompt can stall a step), leaves your real key untouched, and keeps exactly one known key in play. `ssh-copy-id` installs it on the Pi after a single password entry; every later `ssh` then pins it with `-i ... -o IdentitiesOnly=yes`, so no other key is ever offered. You run `ssh-copy-id` yourself, so the password goes straight into it and never passes through the agent. The key is removable once the install is done — see [removing the install key](#removing-the-install-key).
 
 **Step 2.1 — Is it already set up?** The agent runs this. If it prints `already passwordless`, skip straight to Step 3:
 
@@ -144,9 +144,9 @@ ssh -v -i ~/.ssh/id_ed25519_seed_airbnb -o IdentitiesOnly=yes -o BatchMode=yes \
 
 If the `Server accepts key` line is **present**, the Pi has the key and the fault is client-side (wrong key path, or permissions on `~/.ssh/id_ed25519_seed_airbnb`). If it is **absent**, the key never reached the Pi — server-side — so repeat Step 2.3.
 
-### Step 3 — Ensure target software ^dep-software
+### Step 3 — Ensure target software
 
-See [[#^act-software]].
+See [ensuring target software](#target-software-is-ensured).
 
 **Passwordless `sudo` for the target user is REQUIRED** — the package, service-file, and `systemctl` steps all call `sudo`, and `sudo` over a non-interactive `seed_sh` session cannot answer a password prompt. This gate checks it first and **exits non-zero (the install stops here) if it is missing**:
 
@@ -189,9 +189,9 @@ sudo apt-get install -y nodejs git curl chromium x11-xserver-utils
 EOF
 ```
 
-### Step 4 — Deploy the dashboard ^dep-dashboard
+### Step 4 — Deploy the dashboard
 
-See [[#^act-deploy-dashboard]].
+See [deploying the dashboard](#the-dashboard-is-deployed).
 
 Clone (or update) the public repository on the target:
 
@@ -278,9 +278,9 @@ EOF
 
 `is-active` MUST print `active` and `healthz` MUST print `ok`. If either does not, stop — the install has failed.
 
-### Step 5 — Deploy the kiosk ^dep-kiosk
+### Step 5 — Deploy the kiosk
 
-See [[#^act-deploy-kiosk]].
+See [deploying the kiosk](#the-kiosk-is-deployed).
 
 The shipped `plow-airbnb-kiosk.service` hardcodes `Environment=DISPLAY=:0` and `Environment=XAUTHORITY=/home/odio/.Xauthority`. Those defaults suit a Raspberry Pi's console session but are wrong for many setups — an xrdp/XVNC session runs on `:10` or higher, a Wayland greeter parks XWayland elsewhere, and the X authority file is rarely at `~/.Xauthority`. This step **detects** the values from the target user's live graphical session and **rewrites** the unit, rather than trusting the defaults.
 
@@ -373,29 +373,29 @@ EOF
 
 ## Objects
 
-The named entities that exist once [[#^act-deploy-kiosk]] completes.
+The named entities that exist once [deploying the kiosk](#the-kiosk-is-deployed) completes.
 
-### Target machine ^obj-target
+### Target machine
 
 - The Raspberry Pi receiving the install — *this* machine in local mode, the remote Pi in remote mode. Every deploy command runs here.
 
-### `seed_sh` helper ^obj-seed-sh
+### `seed_sh` helper
 
-- A shell function defined in `~/.config/seed-airbnb/install.env` on the local machine. It reads a script on stdin and runs it on [[#^obj-target]] — directly in local mode, over SSH in remote mode. Steps 3–5 and `## Verify` route every target command through it.
+- A shell function defined in `~/.config/seed-airbnb/install.env` on the local machine. It reads a script on stdin and runs it on the [target machine](#target-machine) — directly in local mode, over SSH in remote mode. Steps 3–5 and `## Verify` route every target command through it.
 
-### Deploy directory ^obj-dash-dir
+### Deploy directory
 
-- `/home/<target-user>/services/plow-airbnb-dashboard` on [[#^obj-target]] — the clone of `https://github.com/plow-pbc/seed-plow-airbnb-dashboard.git`, built (`npm run build`) and configured.
+- `/home/<target-user>/services/plow-airbnb-dashboard` on the [target machine](#target-machine) — the clone of `https://github.com/plow-pbc/seed-plow-airbnb-dashboard.git`, built (`npm run build`) and configured.
 
-### Environment file ^obj-env
+### Environment file
 
-- `.env` inside [[#^obj-dash-dir]], mode `600`, derived from `.env.example`. Holds the calendar credentials the dashboard proxies — `ICAL_URL` (a private `.ics` URL), `HOSTEX_ACCESS_TOKEN` (a Hostex access token), and/or the Guesty pair `GUESTY_CLIENT_ID` + `GUESTY_CLIENT_SECRET` (both required together); at least one source is set, multiple are allowed (each becomes its own dashboard panel).
+- `.env` inside the [deploy directory](#deploy-directory), mode `600`, derived from `.env.example`. Holds the calendar credentials the dashboard proxies — `ICAL_URL` (a private `.ics` URL), `HOSTEX_ACCESS_TOKEN` (a Hostex access token), and/or the Guesty pair `GUESTY_CLIENT_ID` + `GUESTY_CLIENT_SECRET` (both required together); at least one source is set, multiple are allowed (each becomes its own dashboard panel).
 
-### Dashboard service ^obj-dashboard-service
+### Dashboard service
 
 - `plow-airbnb-dashboard.service`, a `systemd` unit at `/etc/systemd/system/`. Runs the Node proxy plus the built SPA as the target user, listening on `http://localhost:5174`, and exposes `/healthz`.
 
-### Kiosk service ^obj-kiosk-service
+### Kiosk service
 
 - `plow-airbnb-kiosk.service`, a `systemd` unit at `/etc/systemd/system/`. Launches Chromium in kiosk mode against `http://localhost:5174`, ordered `After=plow-airbnb-dashboard.service`.
 
@@ -403,60 +403,60 @@ The named entities that exist once [[#^act-deploy-kiosk]] completes.
 
 The verbs performed during the install. Each maps to a checklist the agent tracks. All shell lives in `## Dependencies`; the steps below are descriptive.
 
-### Install parameters are collected ^act-collect
+### Install parameters are collected
 
 The agent gathers the install mode and credentials, then writes `~/.config/seed-airbnb/install.env`.
 
 1. Ask the user for the install mode — `local` or `remote` (`tier-2`).
-2. Ask for the calendar credentials (`tier-3`), prompting **separately** for each secret to match the SEED's per-secret pattern — a private `.ics` calendar URL, a Hostex access token, **and — only when `GUESTY_SUPPORT` is set in the agent's environment at SEED runtime** — the Guesty `CLIENT_ID` + `CLIENT_SECRET` pair (both Guesty vars must be supplied together for the panel to enable). When `GUESTY_SUPPORT` is unset, do not mention or prompt for Guesty at all (the feature is experimental). At least one source is required; any combination is accepted (each becomes its own dashboard panel). Collected up front, here, so the user is not stopped for them partway through the install; the agent holds them in context for [[#^act-deploy-dashboard]].
+2. Ask for the calendar credentials (`tier-3`), prompting **separately** for each secret to match the SEED's per-secret pattern — a private `.ics` calendar URL, a Hostex access token, **and — only when `GUESTY_SUPPORT` is set in the agent's environment at SEED runtime** — the Guesty `CLIENT_ID` + `CLIENT_SECRET` pair (both Guesty vars must be supplied together for the panel to enable). When `GUESTY_SUPPORT` is unset, do not mention or prompt for Guesty at all (the feature is experimental). At least one source is required; any combination is accepted (each becomes its own dashboard panel). Collected up front, here, so the user is not stopped for them partway through the install; the agent holds them in context for [deploying the dashboard](#the-dashboard-is-deployed).
 3. In remote mode, ask for the Pi's IP address and login username (`tier-3`).
 4. Resolve the target user: in local mode run `id -un` and report it (`tier-1`); in remote mode it is the Pi username.
-5. Write [[#^dep-collect]]'s `install.env` with those values and confirm it — the calendar credentials are deliberately **not** written there (they are secrets; see [[#^dep-collect]]).
+5. Write [Step 1](#step-1--collect-install-parameters)'s `install.env` with those values and confirm it — the calendar credentials are deliberately **not** written there (they are secrets; see [Step 1](#step-1--collect-install-parameters)).
 
-### Remote access is established ^act-link
+### Remote access is established
 
 In remote mode, the agent walks the user through setting up passwordless, key-based SSH so every later step runs over SSH non-interactively.
 
 1. Skip this Action entirely in local mode.
-2. Check whether passwordless SSH already works; if so, skip ahead to [[#^act-software]].
+2. Check whether passwordless SSH already works; if so, skip ahead to [ensuring target software](#target-software-is-ensured).
 3. Mint a dedicated, passphrase-less `ed25519` install key — `~/.ssh/id_ed25519_seed_airbnb` — if it is not already present; the user's personal key is never read or used.
 4. Direct the **user** to run `ssh-copy-id -i ~/.ssh/id_ed25519_seed_airbnb.pub <PI_USER>@<PI_IP>` themselves in a real terminal application and enter the Pi password once (`tier-3`); the password goes to `ssh-copy-id`, never to the agent.
-5. Confirm passwordless SSH works (`ssh -o BatchMode=yes`). Per [[#^dep-link]].
+5. Confirm passwordless SSH works (`ssh -o BatchMode=yes`). Per [Step 2](#step-2--set-up-passwordless-ssh).
 
-### Target software is ensured ^act-software
+### Target software is ensured
 
 The agent gates on passwordless `sudo`, then confirms the Pi has the required software, installing what is missing.
 
-1. Run the [[#^dep-software]] passwordless-`sudo` gate. If it exits non-zero, the install MUST stop — terminate with `failure` and report the remediation the block printed.
+1. Run the [Step 3](#step-3--ensure-target-software) passwordless-`sudo` gate. If it exits non-zero, the install MUST stop — terminate with `failure` and report the remediation the block printed.
 2. Run the software inventory check.
 3. For anything missing — or Node below 20.6 — run the install block (`tier-2` confirmation).
 
-### The dashboard is deployed ^act-deploy-dashboard
+### The dashboard is deployed
 
-The agent installs and starts [[#^obj-dashboard-service]].
+The agent installs and starts the [dashboard service](#dashboard-service).
 
-1. Clone or update [[#^obj-dash-dir]] on the target.
+1. Clone or update the [deploy directory](#deploy-directory) on the target.
 2. Run `npm ci` and `npm run build`.
-3. Create [[#^obj-env]] from `.env.example`, `chmod 600` it, and set the calendar credentials — `ICAL_URL`, `HOSTEX_ACCESS_TOKEN`, and/or the Guesty pair `GUESTY_CLIENT_ID` + `GUESTY_CLIENT_SECRET` — collected in [[#^act-collect]]; no new prompt.
+3. Create the [environment file](#environment-file) from `.env.example`, `chmod 600` it, and set the calendar credentials — `ICAL_URL`, `HOSTEX_ACCESS_TOKEN`, and/or the Guesty pair `GUESTY_CLIENT_ID` + `GUESTY_CLIENT_SECRET` — collected when [install parameters are collected](#install-parameters-are-collected); no new prompt.
 4. Replace `odio` with the target user throughout `plow-airbnb-dashboard.service`.
 5. Copy the unit to `/etc/systemd/system/`, `daemon-reload`, `enable --now`.
-6. Confirm `systemctl is-active` is `active` and `/healthz` returns `ok`. Per [[#^dep-dashboard]].
+6. Confirm `systemctl is-active` is `active` and `/healthz` returns `ok`. Per [Step 4](#step-4--deploy-the-dashboard).
 
-### The kiosk is deployed ^act-deploy-kiosk
+### The kiosk is deployed
 
-The agent installs and starts [[#^obj-kiosk-service]], correcting its display settings for the actual target rather than trusting the shipped `:0` / `~/.Xauthority` defaults.
+The agent installs and starts the [kiosk service](#kiosk-service), correcting its display settings for the actual target rather than trusting the shipped `:0` / `~/.Xauthority` defaults.
 
 1. Detect the target user's live graphical session — `DISPLAY` and `XAUTHORITY` — and validate the pair reaches an X server.
 2. Confirm the detected values (`tier-2`); if detection failed, ask the user for them (`tier-3`).
 3. Replace `odio` with the target user, and rewrite the `DISPLAY`/`XAUTHORITY` lines of `plow-airbnb-kiosk.service` from the detected values.
 4. Copy the unit to `/etc/systemd/system/`, `daemon-reload`, `enable --now`.
-5. Confirm `systemctl is-active` is `active`. Per [[#^dep-kiosk]].
+5. Confirm `systemctl is-active` is `active`. Per [Step 5](#step-5--deploy-the-kiosk).
 
 ## Verify
 
-Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]] via [[#^obj-seed-sh]]; the shell is `tier-2` — display and confirm before running. None mutate installed state.
+Read-only checks confirming the install succeeded. Each runs on the [target machine](#target-machine) via the [`seed_sh` helper](#seed_sh-helper); the shell is `tier-2` — display and confirm before running. None mutate installed state.
 
-1. **Dashboard service is running.** ^v-dashboard-active
+1. **Dashboard service is running.**
 
    ```sh
    source ~/.config/seed-airbnb/install.env
@@ -467,7 +467,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
 
    Expected: `active`.
 
-2. **Health endpoint responds.** ^v-healthz
+2. **Health endpoint responds.**
 
    ```sh
    source ~/.config/seed-airbnb/install.env
@@ -478,7 +478,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
 
    Expected: `ok`.
 
-3. **Environment file is present and locked down.** ^v-env
+3. **Environment file is present and locked down.**
 
    ```sh
    source ~/.config/seed-airbnb/install.env
@@ -489,7 +489,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
 
    Expected: `600` followed by `credential-set`.
 
-4. **Service units carry the real username, not `odio`.** ^v-username
+4. **Service units carry the real username, not `odio`.**
 
    ```sh
    source ~/.config/seed-airbnb/install.env
@@ -500,7 +500,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
 
    Expected: `clean`.
 
-5. **Kiosk service is running.** ^v-kiosk-active
+5. **Kiosk service is running.**
 
    ```sh
    source ~/.config/seed-airbnb/install.env
@@ -517,11 +517,14 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
 
 ## Open
 
-- Passwordless `sudo` for the target user is required and is hard-gated at the start of Step 3. The SEED cannot grant it automatically — that needs the user's password — so a failing gate stops the install with remediation instructions. ^o-sudo
-- The kiosk unit calls Chromium at `/usr/bin/chromium`. Some images ship it as `chromium-browser` — adjust the unit's `ExecStart` if so. ^o-chromium
-- Step 5 detects `DISPLAY`/`XAUTHORITY` from whatever graphical session is live at install time. If that session is ephemeral — an xrdp/XVNC login, a Wayland greeter's XWayland — the values may not survive a reboot; a persistent boot kiosk needs console autologin so a stable session exists. Re-run the Step 5 detection block after configuring that. ^o-display
-- **remote mode only:** Step 2 mints a dedicated SSH key, `~/.ssh/id_ed25519_seed_airbnb`, used only to drive this one-time install. Once the install — and `## Verify` — is complete it is safe to remove: delete the keypair on this machine (`rm ~/.ssh/id_ed25519_seed_airbnb ~/.ssh/id_ed25519_seed_airbnb.pub`) and strip its line — the one ending `seed-airbnb-install` — from `~/.ssh/authorized_keys` on the Pi. The dashboard and kiosk services need no SSH; only the install does. ^o-install-key
-- No uninstall path. Removing the install is manual: `systemctl disable --now` both units, delete them from `/etc/systemd/system/`, and delete the deploy directory. ^o-uninstall
+- Passwordless `sudo` for the target user is required and is hard-gated at the start of Step 3. The SEED cannot grant it automatically — that needs the user's password — so a failing gate stops the install with remediation instructions.
+- The kiosk unit calls Chromium at `/usr/bin/chromium`. Some images ship it as `chromium-browser` — adjust the unit's `ExecStart` if so.
+- Step 5 detects `DISPLAY`/`XAUTHORITY` from whatever graphical session is live at install time. If that session is ephemeral — an xrdp/XVNC login, a Wayland greeter's XWayland — the values may not survive a reboot; a persistent boot kiosk needs console autologin so a stable session exists. Re-run the Step 5 detection block after configuring that.
+- No uninstall path. Removing the install is manual: `systemctl disable --now` both units, delete them from `/etc/systemd/system/`, and delete the deploy directory.
+
+#### Removing the install key
+
+**remote mode only:** Step 2 mints a dedicated SSH key, `~/.ssh/id_ed25519_seed_airbnb`, used only to drive this one-time install. Once the install — and `## Verify` — is complete it is safe to remove: delete the keypair on this machine (`rm ~/.ssh/id_ed25519_seed_airbnb ~/.ssh/id_ed25519_seed_airbnb.pub`) and strip its line — the one ending `seed-airbnb-install` — from `~/.ssh/authorized_keys` on the Pi. The dashboard and kiosk services need no SSH; only the install does.
 
 ## Non-Goals
 
