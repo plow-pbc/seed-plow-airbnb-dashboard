@@ -8,24 +8,38 @@ The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RE
 
 ## Dependencies
 
-This SEED performs a **one-time install** of the plow-airbnb-dashboard calendar kiosk onto a single Raspberry Pi. The install runs in one of two modes, chosen by the user (`tier-2`):
+This SEED performs a **one-time install** of the plow-airbnb-dashboard (a calendar/reservation web service, plus a Chromium **kiosk** when the target has a display) onto a single host machine. The install runs in one of two modes:
 
-- **local** — the Pi is *this* machine; every deploy command runs in a local shell.
-- **remote** — the Pi is reached over the network; every deploy command runs on it over SSH from this machine.
+- **local** (default) — the target is *this* machine, i.e. the **main host** you run the install on; every deploy command runs in a local shell. This is the assumption unless the user explicitly asks to target a separate machine.
+- **remote** — the target is a *separate* machine (for example a dedicated Raspberry Pi wall-display) reached over the network; every deploy command runs on it over SSH from this machine.
 
-Every deploy command therefore runs *on the target Pi*. A helper, [[#^obj-seed-sh]] (`seed_sh`), hides the local/remote split: it reads a script on stdin and runs it on the target. The steps below are written once, against the target, and work in both modes.
+Every deploy command therefore runs *on the target machine*. A helper, [[#^obj-seed-sh]] (`seed_sh`), hides the local/remote split: it reads a script on stdin and runs it on the target. The steps below are written once, against the target, and work in both modes.
 
-Secret hygiene: the calendar credentials (an `.ics` URL, a Hostex access token, a Guesty `CLIENT_ID`+`CLIENT_SECRET` pair, or any combination) and the Pi password are secrets. No step places either on a process command line (`argv`); the password is never read into the agent's context at all (see [[#^act-link]]).
+Secret hygiene: the calendar credentials (an `.ics` URL, a Hostex access token, a Guesty `CLIENT_ID`+`CLIENT_SECRET` pair, or any combination) and — remote mode only — the target machine's login password are secrets. No step places either on a process command line (`argv`); the password is never read into the agent's context at all (see [[#^act-link]]).
 
 The Bash tool does not persist shell state between calls — so every step that uses `seed_sh` first `source`s the config file written in Step 1.
 
 All shell blocks below are `tier-2`: each MUST be displayed in full and confirmed before it runs. Entries are ordered hardware → calendar → software, then the five install steps.
 
+### Invocation as a sub-seed ^dep-subseed
+
+This SEED runs in one of two ways:
+
+- **Standalone** — the operator runs it directly. It installs on the **main host** (`local` mode) by default; remote (a separate machine such as a Raspberry Pi) is used only when the operator explicitly asks. Step 1 collects every parameter, including the calendar credentials, from scratch. Everything below describes this path.
+- **As a sub-seed** — it is invoked at the end of `plow-pbc/seed-hermes-airbnb-manager`'s install (that SEED's §16, gated on its `INSTALL_DASHBOARD=yes` up-front opt-in). The sub-seed run is **fully non-interactive** — once the parent's single up-front opt-in is given, this SEED MUST NOT prompt for anything. Specifically, when invoked as a sub-seed:
+  - **Install mode is fixed to `local` on the main host** (the box running the Hermes stack). `INSTALL_MODE=local`, `TARGET_USER=$(id -un)`. Step 2 (SSH) is skipped; the operator is never asked to choose local/remote or for a Pi address.
+  - **The sole calendar source is the reused `HOSTEX_ACCESS_TOKEN`** the parent already collected (see [[#^act-collect]]). This SEED MUST NOT prompt for an `.ics` URL or a Guesty pair — both are left empty. The Hostex token alone satisfies the "at least one source" rule.
+  - **`tier-2` per-block confirmations are waived** — shell blocks run directly, since the parent procedure is itself non-interactive and the operator consented at the opt-in.
+  - **The kiosk (Step 5) is best-effort:** if the host has a graphical session, install it; if the host is headless, install only the dashboard web service and **skip the kiosk without prompting** for `DISPLAY`/`XAUTHORITY` (the [[#^act-deploy-kiosk]] tier-3 fallback does not apply in sub-seed mode).
+  - **Passwordless `sudo` on the host is still REQUIRED** (Step 3's hard gate). If it is missing, the sub-seed STOPS with the remediation Step 3 prints — it does not prompt to work around it.
+
+  The token is carried in the agent's context across the hand-off and, per the secret hygiene above, is written only into the mode-`600` [[#^obj-env]] in Step 4. Apart from these non-interactive defaults, the same steps and `## Verify` apply (with the kiosk gate relaxed for a headless host).
+
 ### Hardware
 
-- A **Raspberry Pi** running Raspberry Pi OS (Debian-based, `systemd`), reachable as the install target.
-- For the kiosk unit: an **attached display** and a graphical session on `:0` (`graphical.target`).
-- **remote** mode only: a second machine — the one running this install — on the same network as the Pi.
+- A **host machine** running a `systemd`-based Linux (Debian, Raspberry Pi OS, etc.), reachable as the install target. By default this is *this* machine (`local` mode); in `remote` mode it is a separate machine such as a Raspberry Pi.
+- For the kiosk unit (**optional**): an **attached display** and a graphical session (typically `:0`, `graphical.target`). A **headless** host installs only the dashboard web service and skips the kiosk.
+- **remote** mode only: a second machine — the one running this install — on the same network as the target.
 
 ### Calendar access
 
@@ -46,7 +60,7 @@ Collect, per [[#^act-collect]]:
 
 | Parameter | Tier | Notes |
 |---|---|---|
-| Install mode | `tier-2` | `local` or `remote`. |
+| Install mode | `tier-2` | `local` (default — this main host) or `remote` (a separate machine, e.g. a Pi). Fixed to `local` and not asked when run as a sub-seed. |
 | Calendar credentials — `.ics` URL | `tier-3` | Optional. Adds the event-list panel. Secret — held by the agent, not stored in `install.env`. |
 | Calendar credentials — Hostex access token | `tier-3` | Optional. Adds the Hostex reservations panel. Secret. |
 | Calendar credentials — Guesty `CLIENT_ID` | `tier-3` | Optional. **Only offered when `GUESTY_SUPPORT` is set** in the agent's environment (experimental). Must be paired with the Guesty `CLIENT_SECRET` below to add the Guesty reservations panel. Secret. |
@@ -331,7 +345,7 @@ Review the output (`tier-2`):
 
 - **`verdict: OK`** — the detected pair reaches the X server. Continue.
 - **`verdict: UNVERIFIED`** — `xset` is absent, so the pair could not be tested; the detected values are still the best guess. Continue, but expect to revisit if the kiosk fails.
-- **`verdict: UNREACHABLE`, or `DISPLAY: <none>`** — detection failed, most often because no graphical session is logged in right now. Do not guess. Ask the user (`tier-3`) for the correct `DISPLAY` and `XAUTHORITY`, then write them into `~/.config/seed-airbnb/kiosk.env` on the target (`KIOSK_DISPLAY=` / `KIOSK_XAUTHORITY=`) before continuing.
+- **`verdict: UNREACHABLE`, or `DISPLAY: <none>`** — detection failed, most often because no graphical session is logged in right now. In **standalone** mode, do not guess: ask the user (`tier-3`) for the correct `DISPLAY` and `XAUTHORITY`, then write them into `~/.config/seed-airbnb/kiosk.env` on the target (`KIOSK_DISPLAY=` / `KIOSK_XAUTHORITY=`) before continuing. In **sub-seed** mode (see [[#^dep-subseed]]), do NOT prompt — treat the host as headless, **skip the kiosk entirely**, and finish with just the dashboard web service installed.
 
 Then patch the unit — swap the `odio` username and rewrite the display/auth lines from the detected values:
 
@@ -407,10 +421,10 @@ The verbs performed during the install. Each maps to a checklist the agent track
 
 The agent gathers the install mode and credentials, then writes `~/.config/seed-airbnb/install.env`.
 
-1. Ask the user for the install mode — `local` or `remote` (`tier-2`).
-2. Ask for the calendar credentials (`tier-3`), prompting **separately** for each secret to match the SEED's per-secret pattern — a private `.ics` calendar URL, a Hostex access token, **and — only when `GUESTY_SUPPORT` is set in the agent's environment at SEED runtime** — the Guesty `CLIENT_ID` + `CLIENT_SECRET` pair (both Guesty vars must be supplied together for the panel to enable). When `GUESTY_SUPPORT` is unset, do not mention or prompt for Guesty at all (the feature is experimental). At least one source is required; any combination is accepted (each becomes its own dashboard panel). Collected up front, here, so the user is not stopped for them partway through the install; the agent holds them in context for [[#^act-deploy-dashboard]].
-3. In remote mode, ask for the Pi's IP address and login username (`tier-3`).
-4. Resolve the target user: in local mode run `id -un` and report it (`tier-1`); in remote mode it is the Pi username.
+1. Determine the install mode. **Default to `local`** (install on this main host); only use `remote` — a separate machine such as a Raspberry Pi reached over SSH — if the user explicitly asks for it (`tier-2`). As a sub-seed (see [[#^dep-subseed]]), the mode is fixed to `local` and is NOT asked.
+2. Ask for the calendar credentials (`tier-3`), prompting **separately** for each secret to match the SEED's per-secret pattern — a private `.ics` calendar URL, a Hostex access token, **and — only when `GUESTY_SUPPORT` is set in the agent's environment at SEED runtime** — the Guesty `CLIENT_ID` + `CLIENT_SECRET` pair (both Guesty vars must be supplied together for the panel to enable). When `GUESTY_SUPPORT` is unset, do not mention or prompt for Guesty at all (the feature is experimental). At least one source is required; any combination is accepted (each becomes its own dashboard panel). Collected up front, here, so the user is not stopped for them partway through the install; the agent holds them in context for [[#^act-deploy-dashboard]]. **When this SEED runs as a sub-seed** (see [[#^dep-subseed]]), this step is non-interactive: the agent already holds a `HOSTEX_ACCESS_TOKEN` from the parent install and MUST reuse it as the **sole** Hostex source. It MUST NOT prompt for an `.ics` URL or a Guesty pair at all — both are left empty.
+3. In remote mode, ask for the target machine's IP address and login username (`tier-3`). Skipped in `local` mode (including every sub-seed run).
+4. Resolve the target user: in local mode run `id -un` and report it (`tier-1`); in remote mode it is the target machine's username.
 5. Write [[#^dep-collect]]'s `install.env` with those values and confirm it — the calendar credentials are deliberately **not** written there (they are secrets; see [[#^dep-collect]]).
 
 ### Remote access is established ^act-link
@@ -447,7 +461,7 @@ The agent installs and starts [[#^obj-dashboard-service]].
 The agent installs and starts [[#^obj-kiosk-service]], correcting its display settings for the actual target rather than trusting the shipped `:0` / `~/.Xauthority` defaults.
 
 1. Detect the target user's live graphical session — `DISPLAY` and `XAUTHORITY` — and validate the pair reaches an X server.
-2. Confirm the detected values (`tier-2`); if detection failed, ask the user for them (`tier-3`).
+2. Confirm the detected values (`tier-2`); if detection failed, ask the user for them (`tier-3`) — **except in sub-seed mode**, where a headless host means the kiosk is skipped without prompting (see [[#^dep-subseed]]) and the remaining steps do not run.
 3. Replace `odio` with the target user, and rewrite the `DISPLAY`/`XAUTHORITY` lines of `plow-airbnb-kiosk.service` from the detected values.
 4. Copy the unit to `/etc/systemd/system/`, `daemon-reload`, `enable --now`.
 5. Confirm `systemctl is-active` is `active`. Per [[#^dep-kiosk]].
@@ -509,7 +523,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
    EOF
    ```
 
-   Expected: `active`.
+   Expected: `active` — **or** the kiosk was intentionally skipped because the host is headless (sub-seed mode; see [[#^dep-subseed]]). In that case this gate does not apply and only the dashboard web-service gates (1–4 above) must pass.
 
 ## Feedback
 
@@ -522,6 +536,7 @@ Read-only checks confirming the install succeeded. Each runs on [[#^obj-target]]
 - Step 5 detects `DISPLAY`/`XAUTHORITY` from whatever graphical session is live at install time. If that session is ephemeral — an xrdp/XVNC login, a Wayland greeter's XWayland — the values may not survive a reboot; a persistent boot kiosk needs console autologin so a stable session exists. Re-run the Step 5 detection block after configuring that. ^o-display
 - **remote mode only:** Step 2 mints a dedicated SSH key, `~/.ssh/id_ed25519_seed_airbnb`, used only to drive this one-time install. Once the install — and `## Verify` — is complete it is safe to remove: delete the keypair on this machine (`rm ~/.ssh/id_ed25519_seed_airbnb ~/.ssh/id_ed25519_seed_airbnb.pub`) and strip its line — the one ending `seed-airbnb-install` — from `~/.ssh/authorized_keys` on the Pi. The dashboard and kiosk services need no SSH; only the install does. ^o-install-key
 - No uninstall path. Removing the install is manual: `systemctl disable --now` both units, delete them from `/etc/systemd/system/`, and delete the deploy directory. ^o-uninstall
+- This SEED can run standalone or as a sub-seed of `plow-pbc/seed-hermes-airbnb-manager` (its §16; see [[#^dep-subseed]]). As a sub-seed it installs on the **main host** (`local` mode) fully non-interactively — reusing the parent's Hostex token, skipping `.ics`/Guesty prompts, and installing the kiosk only when the host has a display. The two stacks are otherwise independent: they share only the Hostex credential — no shared process, port, or compose network — and installing one never rolls back the other. To put the kiosk on a separate Raspberry Pi instead, run this SEED standalone in `remote` mode. ^o-subseed
 
 ## Non-Goals
 
