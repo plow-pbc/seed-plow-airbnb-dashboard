@@ -8,3 +8,5 @@ docs/plans/
 *.log
 *.tsbuildinfo
 .vercel
+verify-report.json
+install-report.json
