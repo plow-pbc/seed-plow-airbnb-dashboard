@@ -14,4 +14,7 @@ Operating point (org default):
 - **Spec rigidity:** the SEED prose IS the contract; a handled edge case the
   spec never asked for is a cost, not a feature.
 
-**This repo's `ref/` payload:** (none) — spec only.
+**This repo's reference payload:** No `ref/` directory; the reference
+implementation lives at the repo root (`api/`, `src/`, `server.js`, plus the
+Vite/TypeScript dashboard). Convention drift — code should live under `ref/`;
+relocating it is a future follow-up.
