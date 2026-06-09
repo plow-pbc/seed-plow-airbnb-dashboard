@@ -3,7 +3,7 @@
 This is a **SEED-convention repo**: `SEED.md` and `README.md` (RFC-2119
 prose) are the authoritative artifacts; `ref/` is a single-operator
 reference implementation of that prose. Review for **convention conformance
-and prose↔ref drift**, not for product-scale hardening.
+and prose↔root-reference drift**, not for product-scale hardening.
 
 Operating point (org default):
 
